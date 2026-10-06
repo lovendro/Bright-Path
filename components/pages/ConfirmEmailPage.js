@@ -1,0 +1,5 @@
+import { brand, escapeText } from '../Navigation.js';
+
+export function ConfirmEmailPage(email = '') {
+  return `<div class="auth-layout"><section class="auth-panel">${brand}<h1>Confirm your email</h1><p class="sub">Enter the verification code from the email we sent you${email ? ` to <strong>${escapeText(email)}</strong>` : ''}.</p><form id="confirm-email-form"><label for="confirmation-email">Email</label><input id="confirmation-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" value="${escapeText(email)}" required><label for="confirmation-code">Verification code</label><input id="confirmation-code" name="token" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" placeholder="6-digit code" required><button class="btn" type="submit">Confirm email</button></form><div class="auth-foot">Already confirmed? <a class="text-link" href="#login" data-page="login">Log in</a></div></section><aside class="auth-side"><div><h2>One last step</h2><p>Confirm your email address to finish creating your Bright Path account.</p></div></aside></div>`;
+}

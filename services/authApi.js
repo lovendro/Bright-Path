@@ -31,8 +31,9 @@ export async function register({ name, email, password, level }) {
       email: email.trim().toLowerCase(), password,
       data: { full_name: name.trim(), level }
     });
-    if (response.session) saveRemoteSession(response.session);
-    return { user: mapRemoteUser(response.user), needsEmailConfirmation: !response.session };
+    const hasSession = Boolean(response.access_token && response.refresh_token);
+    if (hasSession) saveRemoteSession(response);
+    return { user: mapRemoteUser(response.user), needsEmailConfirmation: !hasSession };
   }
   const accounts = readStore(ACCOUNTS, []);
   const normalizedEmail = email.trim().toLowerCase();
@@ -49,6 +50,19 @@ export async function register({ name, email, password, level }) {
   const user = { id: account.id, name: account.name, email: account.email, level: account.level, createdAt: account.createdAt };
   writeStore(SESSION, user);
   return { user, needsEmailConfirmation: false };
+}
+
+export async function confirmEmail({ email, token }) {
+  const response = await supabaseAuth('verify', {
+    email: email.trim().toLowerCase(),
+    token: token.trim(),
+    type: 'signup'
+  });
+  if (!response.access_token || !response.refresh_token || !response.user) {
+    throw new Error('Email confirmation did not return a valid session. Request a new confirmation email and try again.');
+  }
+  saveRemoteSession(response);
+  return mapRemoteUser(response.user);
 }
 
 export async function login({ email, password }) {

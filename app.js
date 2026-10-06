@@ -1,8 +1,9 @@
-import { currentUser, login, logout, register, createResource, createGroup, createQuestion, createDiscussion, toggleSavedResource, joinGroup, voteQuestion, createMessage, markNotificationsRead, updateProfile, getProfile } from './services/index.js';
+import { confirmEmail, currentUser, login, logout, register, createResource, createGroup, createQuestion, createDiscussion, toggleSavedResource, joinGroup, voteQuestion, createMessage, markNotificationsRead, updateProfile, getProfile } from './services/index.js';
 import { appShell, escapeText } from './components/Navigation.js';
 import { LandingPage } from './components/pages/LandingPage.js';
 import { SignupPage } from './components/pages/SignupPage.js';
 import { LoginPage } from './components/pages/LoginPage.js';
+import { ConfirmEmailPage } from './components/pages/ConfirmEmailPage.js';
 import { HomePage } from './components/pages/HomePage.js';
 import { ResourcesPage } from './components/pages/ResourcesPage.js';
 import { StudyGroupsPage } from './components/pages/StudyGroupsPage.js';
@@ -27,6 +28,7 @@ const components = {
 };
 let user = currentUser();
 let page = location.hash.slice(1) || 'home';
+let pendingConfirmationEmail = sessionStorage.getItem('bright-path:confirmation-email') || '';
 let query = '';
 let toastTimer;
 let renderVersion = 0;
@@ -49,6 +51,7 @@ async function render(animate = true) {
   if (protectedPages.has(page) && !user) page = 'login';
   if (page === 'signup') root.innerHTML = SignupPage();
   else if (page === 'login') root.innerHTML = LoginPage();
+  else if (page === 'confirm') root.innerHTML = ConfirmEmailPage(pendingConfirmationEmail);
   else if (protectedPages.has(page) && user) {
     const component = components[page];
     try {
@@ -63,7 +66,7 @@ async function render(animate = true) {
 }
 
 function navigate(nextPage) {
-  const allowed = ['home', 'signup', 'login', ...protectedPages];
+  const allowed = ['home', 'signup', 'login', 'confirm', ...protectedPages];
   page = allowed.includes(nextPage) ? nextPage : 'home';
   if (protectedPages.has(page) && !user && page !== 'home') {
     sessionStorage.setItem('bright-path:return-to', page);
@@ -169,10 +172,12 @@ document.addEventListener('submit', async event => {
         : await login({ email: data.get('email'), password: data.get('password') });
       if (authResult.needsEmailConfirmation) {
         user = null;
-        page = 'login';
-        history.replaceState(null, '', '#login');
+        pendingConfirmationEmail = String(data.get('email')).trim().toLowerCase();
+        sessionStorage.setItem('bright-path:confirmation-email', pendingConfirmationEmail);
+        page = 'confirm';
+        history.replaceState(null, '', '#confirm');
         await render();
-        notify('Check your email to confirm your new account, then log in.');
+        notify('Check your email for a 6-digit confirmation code.');
         return;
       }
       user = authResult.user;
@@ -184,6 +189,23 @@ document.addEventListener('submit', async event => {
       notify(`Welcome to Bright Path, ${user.name}!`);
     } catch (error) {
       notify(error.message || 'We could not complete your account request.');
+    }
+  }
+  if (form.id === 'confirm-email-form') {
+    event.preventDefault();
+    const data = new FormData(form);
+    try {
+      user = await confirmEmail({ email: data.get('email'), token: data.get('token') });
+      pendingConfirmationEmail = '';
+      sessionStorage.removeItem('bright-path:confirmation-email');
+      const requestedPage = sessionStorage.getItem('bright-path:return-to') || 'home';
+      sessionStorage.removeItem('bright-path:return-to');
+      page = requestedPage;
+      history.replaceState(null, '', `#${page}`);
+      await render();
+      notify(`Welcome to Bright Path, ${user.name}!`);
+    } catch (error) {
+      notify(error.message || 'We could not confirm your email. Check the code and try again.');
     }
   }
   if (form.id === 'create-form') {
