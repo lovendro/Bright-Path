@@ -1,4 +1,4 @@
-import { listNotifications } from '../../api/notificationApi.js';
+import { listNotifications } from '../../services/notificationApi.js';
 import { emptyState, escapeText } from '../Navigation.js';
 export async function NotificationsPage(user) {
   const notifications = await listNotifications(user.id);

@@ -12,7 +12,7 @@ Supabase provides the hosted PostgreSQL database, email/password authentication,
 
 1. Create a Supabase project using the [Supabase dashboard](https://supabase.com/dashboard). The free plan is suitable for an initial prototype; plan limits and terms may change.
 2. In the project's **SQL Editor**, run [`supabase/schema.sql`](supabase/schema.sql). It creates the tables, profile/group/vote triggers, indexes, and row-level security policies. It does not drop tables or user data; re-running it replaces only the named policies and triggers. Existing tables are not automatically migrated if their columns were changed manually.
-3. From **Project Settings → API Keys**, copy the **Project URL** and **publishable key**. Copy [`api/supabaseConfig.local.example.js`](api/supabaseConfig.local.example.js) to `api/supabaseConfig.local.js` and enter the values there. The actual local config is ignored by Git. A publishable key is designed for browser use; never put a `sb_secret_` or service-role key there.
+3. From **Project Settings → API Keys**, copy the **Project URL** and **publishable key**. Copy [`services/supabaseConfig.local.example.js`](services/supabaseConfig.local.example.js) to `services/supabaseConfig.local.js` and enter the values there. The actual local config is ignored by Git. A publishable key is designed for browser use; never put a `sb_secret_` or service-role key there.
 4. In **Authentication → URL Configuration**, add the local development URL and eventual deployed website URL as allowed redirect URLs. Email confirmation can be enabled; with confirmation on, new users must confirm their email before signing in.
 5. Deploy this static site to a host such as Netlify, Vercel, or GitHub Pages. Supabase hosts the API and database separately; this app calls Supabase Auth (`/auth/v1`) and PostgREST (`/rest/v1`) directly.
 
@@ -22,7 +22,7 @@ The browser may contain the Supabase **publishable** key; database row-level sec
 
 - `components/pages/` — one ES module component per page: `LandingPage`, `SignupPage`, `LoginPage`, `HomePage`, `ResourcesPage`, `StudyGroupsPage`, `QuestionsPage`, `CommunityPage`, `AILearningHubPage`, `MessagesPage`, `NotificationsPage`, and `ProfilePage`.
 - `components/Navigation.js` and `components/PageHelpers.js` — shared layout and UI helpers.
-- `api/` — data-service modules for auth, profiles, resources, groups, questions, discussions, messages, notifications, and browser storage.
+- `services/` — browser-side data-service modules for auth, profiles, resources, groups, questions, discussions, messages, notifications, and browser storage.
 - `app.js` — routing, page rendering, form handling, and UI event coordination.
 
 ## API behavior and remaining production work

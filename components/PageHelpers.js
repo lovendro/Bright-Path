@@ -1,5 +1,5 @@
 import { escapeText, emptyState } from './Navigation.js';
-import { savedResourceIds } from '../api/resourceApi.js';
+import { savedResourceIds } from '../services/resourceApi.js';
 
 export function panel(title, body, action = '') {
   return `<section class="panel"><div class="panel-head"><h2>${escapeText(title)}</h2>${action}</div>${body}</section>`;

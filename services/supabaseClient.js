@@ -19,7 +19,7 @@ function remoteError(data, response) {
 }
 
 export async function supabaseAuth(path, body) {
-  if (!isSupabaseConfigured) throw new Error('Remote database is not configured yet. Add your Supabase Project URL and anon key in api/supabaseConfig.js.');
+  if (!isSupabaseConfigured) throw new Error('Remote database is not configured yet. Add your Supabase Project URL and publishable key in services/supabaseConfig.local.js.');
   const response = await fetch(`${SUPABASE_URL}/auth/v1/${path}`, {
     method: 'POST',
     headers: { apikey: SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },

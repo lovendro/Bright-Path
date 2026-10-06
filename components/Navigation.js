@@ -1,4 +1,4 @@
-import { isSupabaseConfigured } from '../api/supabaseConfig.js';
+import { isSupabaseConfigured } from '../services/supabaseConfig.js';
 
 export const brand = `<a class="brand" href="#home" data-page="home" aria-label="Bright Path home"><span class="brand-mark"><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M16 27V13M16 18C8 18 5 13 6 6c7 0 11 3 10 10Zm0-4c0-7 4-11 11-11 0 7-3 11-11 11Z" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 27h16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></span><span>Bright Path</span></a>`;
 

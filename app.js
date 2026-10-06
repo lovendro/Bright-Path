@@ -1,4 +1,4 @@
-import { currentUser, login, logout, register, createResource, createGroup, createQuestion, createDiscussion, toggleSavedResource, joinGroup, voteQuestion, createMessage, markNotificationsRead, updateProfile, getProfile } from './api/index.js';
+import { currentUser, login, logout, register, createResource, createGroup, createQuestion, createDiscussion, toggleSavedResource, joinGroup, voteQuestion, createMessage, markNotificationsRead, updateProfile, getProfile } from './services/index.js';
 import { appShell, escapeText } from './components/Navigation.js';
 import { LandingPage } from './components/pages/LandingPage.js';
 import { SignupPage } from './components/pages/SignupPage.js';

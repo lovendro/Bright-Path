@@ -1,4 +1,4 @@
-// Project-specific values go in the ignored api/supabaseConfig.local.js file.
+// Project-specific values go in the ignored services/supabaseConfig.local.js file.
 // Only a Supabase publishable key belongs in browser code; never put a secret key here.
 let localConfig = {};
 try {

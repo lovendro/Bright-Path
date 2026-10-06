@@ -1,4 +1,4 @@
-import { listMessages } from '../../api/messageApi.js';
+import { listMessages } from '../../services/messageApi.js';
 import { emptyState } from '../Navigation.js';
 export async function MessagesPage(user) {
   const messages = await listMessages(user.id);

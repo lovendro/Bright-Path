@@ -1,5 +1,5 @@
-import { getProfile, updateProfile } from '../../api/profileApi.js';
-import { listResources } from '../../api/resourceApi.js';
+import { getProfile, updateProfile } from '../../services/profileApi.js';
+import { listResources } from '../../services/resourceApi.js';
 import { escapeText } from '../Navigation.js';
 import { resourceCards } from '../PageHelpers.js';
 export async function ProfilePage(user) {

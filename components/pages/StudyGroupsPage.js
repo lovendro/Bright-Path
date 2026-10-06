@@ -1,4 +1,4 @@
-import { listGroups } from '../../api/groupApi.js';
+import { listGroups } from '../../services/groupApi.js';
 import { emptyState, escapeText } from '../Navigation.js';
 import { groupRows } from '../PageHelpers.js';
 export async function StudyGroupsPage(user, query = '') {

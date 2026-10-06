@@ -1,4 +1,4 @@
-import { listResources } from '../../api/resourceApi.js';
+import { listResources } from '../../services/resourceApi.js';
 import { emptyState, escapeText } from '../Navigation.js';
 import { resourceCards } from '../PageHelpers.js';
 export async function ResourcesPage(user, query = '') {

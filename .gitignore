@@ -10,7 +10,7 @@ coverage/
 !.env.*.example
 
 # Per-machine Supabase browser configuration (contains a publishable key)
-api/supabaseConfig.local.js
+services/supabaseConfig.local.js
 
 # Common private key/certificate formats
 *.pem

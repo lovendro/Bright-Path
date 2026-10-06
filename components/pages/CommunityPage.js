@@ -1,4 +1,4 @@
-import { listDiscussions } from '../../api/discussionApi.js';
+import { listDiscussions } from '../../services/discussionApi.js';
 import { emptyState, escapeText } from '../Navigation.js';
 import { discussionRows } from '../PageHelpers.js';
 export async function CommunityPage(_user, query = '') {

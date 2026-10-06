@@ -1,6 +1,6 @@
-import { listResources } from '../../api/resourceApi.js';
-import { listGroups } from '../../api/groupApi.js';
-import { listQuestions } from '../../api/questionApi.js';
+import { listResources } from '../../services/resourceApi.js';
+import { listGroups } from '../../services/groupApi.js';
+import { listQuestions } from '../../services/questionApi.js';
 import { escapeText } from '../Navigation.js';
 import { groupRows, panel, questionRows, resourceCards } from '../PageHelpers.js';
 

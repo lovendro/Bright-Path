@@ -1,4 +1,4 @@
-import { listQuestions } from '../../api/questionApi.js';
+import { listQuestions } from '../../services/questionApi.js';
 import { emptyState, escapeText } from '../Navigation.js';
 import { questionRows } from '../PageHelpers.js';
 export async function QuestionsPage(_user, query = '') {
