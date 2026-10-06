@@ -34,6 +34,6 @@ export function LandingPage() {
     </section>
     <footer class="footer">
       <div><span class="brand brand-footer">Bright Path</span><p>Better learning, brighter futures.</p></div>
-      <div class="footer-credit"><p>Community-led. Non-profit in spirit. Built to grow with learners.</p><p>Photos: <a href="https://commons.wikimedia.org/wiki/File:Female_students_at_Shela_Primary_School_-_Lamu_County,_Kenya.jpg" target="_blank" rel="noreferrer">Female students at Shela Primary School, Lamu County</a> and <a href="https://commons.wikimedia.org/wiki/File:Kenyan_teacher_training_students.jpg" target="_blank" rel="noreferrer">Kenyan teacher training students</a> by Queen Asali, Wikimedia Commons, <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noreferrer">CC BY-SA 4.0</a>.</p></div>
+      <div class="footer-credit"><p>Community-led. Non-profit in spirit. Built to grow with learners.</p><p>Photos: Female students at Shela Primary School, Lamu County, and Kenyan teacher training students, by Queen Asali, Wikimedia Commons, licensed under CC BY-SA 4.0.</p></div>
     </footer>`;
 }
