@@ -41,6 +41,18 @@ function notify(message) {
   toastTimer = setTimeout(() => toast.classList.remove('show'), 2800);
 }
 
+function setSignupSelectOpen(select, open, focusOption = false) {
+  const trigger = select.querySelector('[data-select-trigger]');
+  const options = select.querySelector('[role="listbox"]');
+  select.classList.toggle('is-open', open);
+  trigger.setAttribute('aria-expanded', String(open));
+  options.hidden = !open;
+  if (open && focusOption) {
+    const selected = options.querySelector('[aria-selected="true"]');
+    (selected || options.firstElementChild)?.focus();
+  }
+}
+
 async function render(animate = true) {
   const thisRender = ++renderVersion;
   const root = document.getElementById('app');
@@ -126,10 +138,26 @@ async function preserveSearch(input) {
 }
 
 document.addEventListener('click', async event => {
-  const target = event.target.closest('[data-page], [data-modal], [data-action], [data-save], [data-join], [data-vote], [data-close-modal]');
+  const select = document.querySelector('[data-signup-select]');
+  const target = event.target.closest('[data-page], [data-modal], [data-action], [data-save], [data-join], [data-vote], [data-close-modal], [data-select-trigger], [data-select-option]');
+  if (select?.classList.contains('is-open') && !select.contains(event.target)) {
+    setSignupSelectOpen(select, false);
+  }
   if (!target) return;
   try {
-    if (target.dataset.page) {
+    if (target.hasAttribute('data-select-trigger')) {
+      const isOpen = target.getAttribute('aria-expanded') === 'true';
+      setSignupSelectOpen(select, !isOpen, !isOpen);
+    } else if (target.hasAttribute('data-select-option')) {
+      const value = target.dataset.selectOption;
+      select.querySelector('input[name="level"]').value = value;
+      select.querySelector('#level-value').textContent = value;
+      select.querySelectorAll('[data-select-option]').forEach(option => {
+        option.setAttribute('aria-selected', String(option === target));
+      });
+      setSignupSelectOpen(select, false);
+      select.querySelector('[data-select-trigger]').focus();
+    } else if (target.dataset.page) {
       event.preventDefault();
       navigate(target.dataset.page);
     } else if (target.dataset.modal) await showModal(target.dataset.modal);
@@ -240,6 +268,27 @@ document.addEventListener('input', event => {
 });
 
 document.addEventListener('keydown', event => {
+  const select = document.querySelector('[data-signup-select]');
+  if (select?.classList.contains('is-open')) {
+    const options = [...select.querySelectorAll('[data-select-option]')];
+    const currentIndex = options.indexOf(document.activeElement);
+    let nextIndex = currentIndex;
+    if (event.key === 'ArrowDown') nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % options.length;
+    else if (event.key === 'ArrowUp') nextIndex = currentIndex < 0 ? options.length - 1 : (currentIndex - 1 + options.length) % options.length;
+    else if (event.key === 'Home') nextIndex = 0;
+    else if (event.key === 'End') nextIndex = options.length - 1;
+    else if (event.key === 'Escape') {
+      setSignupSelectOpen(select, false);
+      select.querySelector('[data-select-trigger]').focus();
+    } else if (event.key === 'Tab') setSignupSelectOpen(select, false);
+    if (nextIndex !== currentIndex && nextIndex >= 0) {
+      event.preventDefault();
+      options[nextIndex].focus();
+    }
+  } else if (event.key === 'ArrowDown' && event.target.matches('[data-select-trigger]')) {
+    event.preventDefault();
+    setSignupSelectOpen(select, true, true);
+  }
   if (event.key === 'Escape') document.getElementById('modal-backdrop')?.remove();
   if (event.key === 'Enter' && event.target.id === 'global-search') {
     query = event.target.value;
