@@ -69,6 +69,20 @@ export function remoteSelect(table, query = 'select=*') { return request(`${tabl
 export function remoteRpc(functionName, body) {
   return request(`rpc/${encodeURIComponent(functionName)}`, { method: 'POST', body });
 }
+export async function remoteStorageRequest(path, { method = 'GET', body, contentType, upsert = false } = {}) {
+  if (!isSupabaseConfigured) throw new Error('Supabase is not configured.');
+  const session = getRemoteSession();
+  const headers = {
+    apikey: SUPABASE_PUBLISHABLE_KEY,
+    Authorization: `Bearer ${session?.access_token || SUPABASE_PUBLISHABLE_KEY}`
+  };
+  if (contentType) headers['Content-Type'] = contentType;
+  if (upsert) headers['x-upsert'] = 'true';
+  const response = await fetch(`${SUPABASE_URL}/storage/v1/${path}`, { method, headers, body });
+  const data = await responseJson(response);
+  if (!response.ok) throw remoteError(data, response);
+  return data;
+}
 export function remoteInsert(table, rows, { query = 'select=*', upsert = false, ignoreDuplicates = false } = {}) {
   const prefer = `return=representation${upsert ? ',resolution=merge-duplicates' : ''}${ignoreDuplicates ? ',resolution=ignore-duplicates' : ''}`;
   return request(`${table}?${query}`, { method: 'POST', body: rows, prefer });

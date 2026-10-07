@@ -6,3 +6,5 @@ export * from './discussionApi.js';
 export * from './messageApi.js';
 export * from './notificationApi.js';
 export * from './profileApi.js';
+export * from './reviewApi.js';
+export * from './callApi.js';

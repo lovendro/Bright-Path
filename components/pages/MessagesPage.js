@@ -2,10 +2,13 @@ import {
   listConversationMessages,
   listConversations
 } from '../../services/messageApi.js';
+import { listCallHistory } from '../../services/callApi.js';
+import { isSupabaseConfigured } from '../../services/supabaseConfig.js';
 import { emptyState, escapeText } from '../Navigation.js';
 
 export async function MessagesPage(user, selectedConversationId = '', searchResults = [], learnerSearch = '') {
   const conversations = await listConversations(user.id);
+  const callHistory = isSupabaseConfigured ? await listCallHistory(user.id) : [];
   const selected = conversations.find(conversation => conversation.id === selectedConversationId);
   const messages = selected &&
     selected.myStatus === 'accepted' && selected.otherStatus === 'accepted'
@@ -17,25 +20,36 @@ export async function MessagesPage(user, selectedConversationId = '', searchResu
     .join('');
   const contactRows = conversations
     .filter(conversation => conversation.myStatus !== 'pending')
-    .map(conversation => `<button class="conversation-link ${selected?.id === conversation.id ? 'active' : ''}" type="button" data-open-conversation="${escapeText(conversation.id)}"><strong>${escapeText(conversation.otherName)}</strong><span>${conversation.otherStatus === 'pending' ? 'Request sent' : conversation.otherStatus === 'rejected' ? 'Request declined' : 'Open conversation'}</span></button>`)
+    .map(conversation => `<button class="conversation-link ${selected?.id === conversation.id ? 'active' : ''}" type="button" data-open-conversation="${escapeText(conversation.id)}"><strong>${escapeText(conversation.otherName)}</strong><span>${conversation.myStatus === 'rejected' ? 'Request declined by you' : conversation.otherStatus === 'pending' ? 'Request sent' : conversation.otherStatus === 'rejected' ? 'Request declined' : 'Open conversation'}</span></button>`)
     .join('');
   const learnerRows = searchResults.length
     ? searchResults.map(learner => `<article class="learner-result"><div><strong>${escapeText(learner.full_name || 'Learner')}</strong><p>${escapeText(learner.level || 'Learner')} · ${learner.is_public ? 'Public account' : 'Private account'}</p></div><button class="btn btn-sm" type="button" data-start-conversation="${escapeText(learner.id)}">Message</button></article>`).join('')
     : learnerSearch ? '<p class="settings-hint">No learners found. Try another name.</p>' : '';
+  const callRows = callHistory.map(call => {
+    const otherUserId = call.callerId === user.id ? call.calleeId : call.callerId;
+    const otherName = conversations.find(conversation => conversation.otherUserId === otherUserId)?.otherName || 'Learner';
+    const status = ({ missed: 'No answer', rejected: 'Declined', ended: 'Ended', accepted: 'Connected', ringing: 'Ringing' })[call.status] || 'Call';
+    return `<article class="call-history-row"><div><strong>${escapeText(otherName)}</strong><span>${call.callerId === user.id ? 'Outgoing' : 'Incoming'} ${call.isVideo ? 'video' : 'audio'} · ${status}</span></div><time>${new Date(call.createdAt).toLocaleDateString()}</time></article>`;
+  }).join('');
 
   let thread;
   if (!selected) {
     thread = emptyState('Choose a conversation', 'Start a conversation with another learner or select one from your inbox.');
   } else if (selected.myStatus === 'pending') {
     thread = `<div class="request-preview"><strong>${escapeText(selected.otherName)}</strong><p>This learner sent you a message request. Accept it to start chatting, or decline it.</p><div class="request-actions"><button class="btn btn-sm" data-request-response="accept" data-conversation-id="${escapeText(selected.id)}">Accept request</button><button class="btn btn-light btn-sm" data-request-response="reject" data-conversation-id="${escapeText(selected.id)}">Decline</button></div></div>`;
+  } else if (selected.myStatus === 'rejected') {
+    thread = '<div class="request-preview"><strong>Request declined</strong><p>You declined this message request. This conversation is closed.</p></div>';
   } else if (selected.otherStatus === 'pending') {
     thread = `<div class="request-preview"><strong>Message request sent</strong><p>Your request to ${escapeText(selected.otherName)} is waiting for approval.</p></div>`;
   } else if (selected.otherStatus === 'rejected') {
     thread = `<div class="request-preview"><strong>Request declined</strong><p>${escapeText(selected.otherName)} declined this message request.</p></div>`;
   } else {
-    const messageRows = messages.map(message => `<div class="bubble ${message.senderId === user.id ? 'mine' : ''}">${escapeText(message.text)}</div>`).join('');
-    thread = `<div class="thread-body">${messageRows || '<p class="settings-hint">No messages yet. Say hello.</p>'}</div><form id="chat-message-form" class="message-compose"><input id="message-input" name="text" placeholder="Write a message" required maxlength="2000" autocomplete="off"><button class="btn btn-sm" type="submit">Send</button></form>`;
+    const messageRows = messages.map(message => `<div class="bubble ${message.senderId === user.id ? 'mine' : ''}" data-message-id="${escapeText(message.id)}">${escapeText(message.text)}</div>`).join('');
+    thread = `<div class="thread-body" data-latest-at="${escapeText(messages.at(-1)?.createdAt || '')}">${messageRows || '<p class="settings-hint">No messages yet. Say hello.</p>'}</div><form id="chat-message-form" class="message-compose"><input id="message-input" name="text" placeholder="Write a message" required maxlength="2000" autocomplete="off"><button class="btn btn-sm" type="submit">Send</button></form>`;
   }
 
-  return `<div class="welcome-row"><div><h1>Messages</h1><p>Chat with other Bright Path learners.</p></div></div><div class="messages-layout"><aside class="panel messages-inbox"><section><h2>Find a learner</h2><form id="learner-search-form" class="learner-search"><input class="field" name="search" value="${escapeText(learnerSearch)}" placeholder="Search by name" maxlength="80"><button class="btn btn-sm" type="submit">Search</button></form>${learnerRows}</section><section><h2>Message requests</h2>${requestRows || '<p class="settings-hint">No pending requests.</p>'}</section><section><h2>Conversations</h2>${contactRows || '<p class="settings-hint">No conversations yet.</p>'}</section></aside><section class="panel messages-panel"><div class="panel-head"><h2>${selected ? escapeText(selected.otherName) : 'Your conversation'}</h2></div>${thread}</section></div>`;
+  const reviewButton = selected?.myStatus === 'accepted' && selected.otherStatus === 'accepted'
+    ? `<button class="btn btn-light btn-sm" data-review-type="profile" data-review-target="${escapeText(selected.otherUserId)}" data-review-name="${escapeText(selected.otherName)}">Review profile</button><button class="btn btn-light btn-sm" data-start-call="audio">Audio call</button><button class="btn btn-light btn-sm" data-start-call="video">Video call</button>`
+    : '';
+  return `<div class="welcome-row"><div><h1>Messages</h1><p>Chat with other Bright Path learners.</p></div></div><div class="messages-layout"><aside class="panel messages-inbox"><section><h2>Find a learner</h2><form id="learner-search-form" class="learner-search"><input class="field" name="search" value="${escapeText(learnerSearch)}" placeholder="Search by name" maxlength="80"><button class="btn btn-sm" type="submit">Search</button></form>${learnerRows}</section><section><h2>Message requests</h2>${requestRows || '<p class="settings-hint">No pending requests.</p>'}</section><section><h2>Conversations</h2>${contactRows || '<p class="settings-hint">No conversations yet.</p>'}</section><section><h2>Call history</h2>${callRows || '<p class="settings-hint">No calls yet.</p>'}</section></aside><section class="panel messages-panel"><div class="panel-head"><h2>${selected ? escapeText(selected.otherName) : 'Your conversation'}</h2>${reviewButton}</div>${thread}</section></div>`;
 }

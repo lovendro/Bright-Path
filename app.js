@@ -1,4 +1,4 @@
-import { confirmEmail, currentUser, login, logout, register, createResource, createGroup, createQuestion, createDiscussion, toggleSavedResource, joinGroup, voteQuestion, markNotificationsRead, updateProfile, getProfile, respondToConversationRequest, searchLearners, sendChatMessage, startConversation } from './services/index.js';
+import { confirmEmail, currentUser, login, logout, register, createResource, createGroup, createQuestion, createAnswer, createDiscussion, toggleSavedResource, joinGroup, voteQuestion, markNotificationsRead, updateProfile, getProfile, respondToConversationRequest, searchLearners, sendChatMessage, startConversation, listReviews, saveReview, sendGroupMessage, listGroupMessages, startCall, listRingingCalls, getCall, respondToCall, markCallMissed, sendCallSignal as publishCallSignal, listCallSignals, clearCallSignals, listConversations, listConversationMessages } from './services/index.js';
 import { appShell, escapeText } from './components/Navigation.js';
 import { LandingPage } from './components/pages/LandingPage.js';
 import { SignupPage } from './components/pages/SignupPage.js';
@@ -14,6 +14,7 @@ import { MessagesPage } from './components/pages/MessagesPage.js';
 import { NotificationsPage } from './components/pages/NotificationsPage.js';
 import { ProfilePage } from './components/pages/ProfilePage.js';
 import { SettingsPage } from './components/pages/SettingsPage.js';
+import { isSupabaseConfigured } from './services/supabaseConfig.js';
 
 const protectedPages = new Set(['home', 'resources', 'groups', 'qa', 'community', 'ai', 'messages', 'notifications', 'profile', 'settings']);
 const components = {
@@ -33,10 +34,17 @@ let page = location.hash.slice(1) || 'home';
 let pendingConfirmationEmail = sessionStorage.getItem('bright-path:confirmation-email') || '';
 let query = '';
 let selectedConversationId = '';
+let selectedGroupChatId = '';
 let learnerSearch = '';
 let learnerSearchResults = [];
 let toastTimer;
 let renderVersion = 0;
+let activeCall = null;
+let callMonitorTimer = null;
+let callPollInProgress = false;
+let chatRefreshTimer = null;
+let lastChatRefreshError = '';
+let lastCallMonitorError = '';
 
 function notify(message) {
   const toast = document.getElementById('toast');
@@ -44,6 +52,327 @@ function notify(message) {
   toast.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toast.classList.remove('show'), 2800);
+}
+
+function showCallOverlay(call) {
+  document.getElementById('call-overlay')?.remove();
+  const incoming = call.phase === 'incoming';
+  document.body.insertAdjacentHTML('beforeend', `<div class="call-overlay" id="call-overlay"><section class="call-window" role="dialog" aria-modal="true" aria-labelledby="call-title"><div class="call-window-head"><div><h2 id="call-title">${incoming ? 'Incoming' : call.phase === 'outgoing' ? 'Calling' : 'Call'} ${call.isVideo ? 'video' : 'audio'}</h2><p id="call-status">${incoming ? `${escapeText(call.otherName || 'A learner')} is calling you.` : call.phase === 'outgoing' ? `Waiting for ${escapeText(call.otherName || 'the learner')} to answer…` : 'Connecting…'}</p></div><button class="modal-close" type="button" data-call-action="end" aria-label="Close call">×</button></div><div class="call-media ${call.isVideo ? 'video' : 'audio'}"><video id="remote-video" autoplay playsinline${call.isVideo ? '' : ' hidden'}></video><audio id="remote-audio" autoplay${call.isVideo ? ' hidden' : ''}></audio><video id="local-video" autoplay muted playsinline${call.isVideo ? '' : ' hidden'}></video><div class="audio-call-art" ${call.isVideo ? 'hidden' : ''}>${escapeText((call.otherName || 'Learner')[0])}</div></div><div class="call-controls">${incoming ? '<button class="btn" type="button" data-call-action="accept">Accept</button><button class="btn btn-light" type="button" data-call-action="reject">Decline</button>' : '<button class="btn btn-light" type="button" data-call-action="mute">Mute</button>'}${call.isVideo && !incoming ? '<button class="btn btn-light" type="button" data-call-action="camera">Camera off</button>' : ''}${!incoming ? '<button class="btn call-end-button" type="button" data-call-action="end">End call</button>' : ''}</div></section></div>`);
+  if (call.localStream && call.isVideo) {
+    document.getElementById('local-video').srcObject = call.localStream;
+  }
+  if (call.remoteStream) {
+    const media = call.isVideo ? document.getElementById('remote-video') : document.getElementById('remote-audio');
+    media.srcObject = call.remoteStream;
+  }
+}
+
+function setCallStatus(message) {
+  const status = document.getElementById('call-status');
+  if (status) status.textContent = message;
+}
+
+function closeCallMedia() {
+  if (!activeCall) return;
+  clearInterval(activeCall.pollTimer);
+  activeCall.peer?.close();
+  activeCall.localStream?.getTracks().forEach(track => track.stop());
+  document.getElementById('call-overlay')?.remove();
+  activeCall = null;
+}
+
+async function finishCall(updateRemote = true) {
+  const call = activeCall;
+  if (!call) return;
+  try {
+    if (call.phase === 'incoming') {
+      await respondToCall(user.id, call.id, 'rejected');
+    } else if (updateRemote) {
+      await respondToCall(user.id, call.id, 'ended');
+      await clearCallSignals(call.id);
+    }
+  } finally {
+    closeCallMedia();
+    if (page === 'messages') render(false);
+  }
+}
+
+async function setupCallPeer(call) {
+  call.peer = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+  call.localStream.getTracks().forEach(track => call.peer.addTrack(track, call.localStream));
+  call.peer.ontrack = event => {
+    call.remoteStream = event.streams[0];
+    const element = call.isVideo ? document.getElementById('remote-video') : document.getElementById('remote-audio');
+    if (element) element.srcObject = call.remoteStream;
+  };
+  call.peer.onicecandidate = event => {
+    if (!event.candidate || activeCall !== call) return;
+    publishCallSignal(user.id, call.id, call.otherUserId, 'ice-candidate', event.candidate.toJSON())
+      .catch(error => notify(error.message || 'Could not exchange network details for the call.'));
+  };
+  call.peer.onconnectionstatechange = () => {
+    if (call.peer.connectionState === 'connected') setCallStatus('Connected');
+    if (call.peer.connectionState === 'failed') setCallStatus('Could not connect. A TURN relay may be required on this network.');
+  };
+}
+
+async function beginMedia(call) {
+  if (typeof RTCPeerConnection === 'undefined') {
+    throw new Error('This browser does not support WebRTC calls.');
+  }
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error('This browser cannot access a microphone or camera. Open Bright Path over HTTPS and allow device access.');
+  }
+  call.localStream = await navigator.mediaDevices.getUserMedia({
+    audio: true,
+    video: call.isVideo ? { width: { ideal: 1280 }, height: { ideal: 720 } } : false
+  });
+  showCallOverlay(call);
+}
+
+async function processCallSignals(call) {
+  const signals = await listCallSignals(user.id, call.id);
+  for (const signal of signals) {
+    if (call.seenSignals.has(signal.id)) continue;
+    if (signal.event_type === 'offer' && call.phase === 'connecting') {
+      if (!call.peer.remoteDescription) {
+        await call.peer.setRemoteDescription(signal.payload);
+        for (const candidate of call.pendingCandidates.splice(0)) await call.peer.addIceCandidate(candidate);
+      }
+      if (!call.answerSent) {
+        if (!call.peer.localDescription) {
+          const answer = await call.peer.createAnswer();
+          await call.peer.setLocalDescription(answer);
+        }
+        await publishCallSignal(user.id, call.id, call.otherUserId, 'answer', call.peer.localDescription.toJSON());
+        call.answerSent = true;
+      }
+    } else if (signal.event_type === 'answer' && call.phase === 'connecting' && !call.peer.remoteDescription) {
+      await call.peer.setRemoteDescription(signal.payload);
+      for (const candidate of call.pendingCandidates.splice(0)) await call.peer.addIceCandidate(candidate);
+    } else if (signal.event_type === 'ice-candidate') {
+      const candidate = new RTCIceCandidate(signal.payload);
+      if (call.peer.remoteDescription) await call.peer.addIceCandidate(candidate);
+      else call.pendingCandidates.push(candidate);
+    }
+    call.seenSignals.add(signal.id);
+  }
+}
+
+async function pollActiveCall(call) {
+  if (callPollInProgress || activeCall !== call) return;
+  callPollInProgress = true;
+  try {
+    const session = await getCall(call.id);
+    if (!session || ['ended', 'rejected', 'missed'].includes(session.status)) {
+      closeCallMedia();
+      notify(session?.status === 'rejected'
+        ? 'The call was declined.'
+        : session?.status === 'missed' ? 'There was no answer.' : 'The call ended.');
+      if (page === 'messages') render(false);
+      return;
+    }
+    if (call.phase === 'outgoing' && Date.now() - call.startedAt > 60000 && session.status === 'ringing') {
+      const missed = await markCallMissed(user.id, call.id);
+      if (missed) {
+        closeCallMedia();
+        notify('There was no answer.');
+        if (page === 'messages') render(false);
+        return;
+      }
+    }
+    if (call.phase === 'outgoing' && session.status === 'accepted') {
+      call.phase = 'connecting';
+      await setupCallPeer(call);
+    }
+    if (call.phase === 'connecting' && call.callerId === user.id && !call.offerSent) {
+      if (!call.peer) await setupCallPeer(call);
+      if (!call.peer.localDescription) {
+        const offer = await call.peer.createOffer();
+        await call.peer.setLocalDescription(offer);
+      }
+      await publishCallSignal(user.id, call.id, call.otherUserId, 'offer', call.peer.localDescription.toJSON());
+      call.offerSent = true;
+      setCallStatus('Connecting…');
+    }
+    if (call.phase === 'connecting') await processCallSignals(call);
+  } catch (error) {
+    setCallStatus(error.message || 'The call connection failed.');
+  } finally {
+    callPollInProgress = false;
+  }
+}
+
+function monitorCalls() {
+  clearInterval(callMonitorTimer);
+  if (!user || !isSupabaseConfigured) return;
+  callMonitorTimer = setInterval(async () => {
+    try {
+      if (!user) return;
+      const ringing = await listRingingCalls(user.id);
+      const expired = ringing.filter(call => Date.now() - Date.parse(call.createdAt) > 60000);
+      for (const call of expired) await markCallMissed(user.id, call.id);
+      lastCallMonitorError = '';
+      if (activeCall) {
+        if (activeCall.phase !== 'incoming') return;
+        const session = await getCall(activeCall.id);
+        if (!session || ['ended', 'rejected', 'missed'].includes(session.status)) {
+          const status = session?.status;
+          closeCallMedia();
+          notify(status === 'missed' ? 'There was no answer.' : 'The call ended.');
+          if (page === 'messages') render(false);
+        } else if (expired.some(call => call.id === activeCall.id)) {
+          closeCallMedia();
+          notify('There was no answer.');
+          if (page === 'messages') render(false);
+        }
+        return;
+      }
+      const incoming = ringing.find(call => call.calleeId === user.id && Date.now() - Date.parse(call.createdAt) <= 60000);
+      if (!incoming || activeCall) return;
+      const conversations = await listConversations(user.id);
+      const conversation = conversations.find(item => item.id === incoming.conversationId);
+      if (!conversation || conversation.myStatus !== 'accepted') return;
+      activeCall = {
+        ...incoming,
+        otherUserId: incoming.callerId,
+        otherName: conversation.otherName,
+        phase: 'incoming',
+        seenSignals: new Set(),
+        offerSent: false,
+        answerSent: false,
+        pendingCandidates: []
+      };
+      showCallOverlay(activeCall);
+    } catch (error) {
+      const message = error.message || 'Could not check for incoming calls.';
+      if (message !== lastCallMonitorError) notify(message);
+      lastCallMonitorError = message;
+    }
+  }, 2000);
+}
+
+async function refreshActiveChat() {
+  if (!user) return;
+  const directThread = document.querySelector('.thread-body[data-latest-at]');
+  const groupThread = document.querySelector('.group-chat-thread[data-group-id][data-latest-at]');
+  if (!directThread && !groupThread) return;
+
+  const append = (thread, messages, isGroup) => {
+    if (!messages.length) return;
+    const shouldScroll = thread.scrollHeight - thread.scrollTop - thread.clientHeight < 48;
+    thread.querySelector('.settings-hint')?.remove();
+    for (const message of messages) {
+      if (thread.querySelector(`[data-message-id="${CSS.escape(message.id)}"]`)) continue;
+      if (isGroup) {
+        const article = document.createElement('article');
+        article.className = `group-chat-message ${message.senderId === user.id ? 'mine' : ''}`;
+        article.dataset.messageId = message.id;
+        const name = document.createElement('strong');
+        name.textContent = message.senderName || 'Learner';
+        article.append(name);
+        if (message.text) {
+          const text = document.createElement('p');
+          text.textContent = message.text;
+          article.append(text);
+        }
+        if (message.imageUrl) {
+          const image = document.createElement('img');
+          image.src = message.imageUrl;
+          image.alt = 'Picture shared in the study group';
+          image.loading = 'lazy';
+          article.append(image);
+        }
+        const time = document.createElement('time');
+        time.textContent = new Date(message.createdAt).toLocaleString();
+        article.append(time);
+        thread.append(article);
+      } else {
+        const bubble = document.createElement('div');
+        bubble.className = `bubble ${message.senderId === user.id ? 'mine' : ''}`;
+        bubble.dataset.messageId = message.id;
+        bubble.textContent = message.text;
+        thread.append(bubble);
+      }
+      thread.dataset.latestAt = message.createdAt;
+    }
+    if (shouldScroll) thread.scrollTop = thread.scrollHeight;
+  };
+
+  if (directThread && selectedConversationId) {
+    append(directThread, await listConversationMessages(user.id, selectedConversationId, directThread.dataset.latestAt), false);
+  }
+  if (groupThread) {
+    append(groupThread, await listGroupMessages(groupThread.dataset.groupId, groupThread.dataset.latestAt), true);
+  }
+}
+
+function monitorChats() {
+  clearInterval(chatRefreshTimer);
+  if (!user) return;
+  chatRefreshTimer = setInterval(async () => {
+    try {
+      await refreshActiveChat();
+      lastChatRefreshError = '';
+    } catch (error) {
+      const message = error.message || 'Could not refresh the chat.';
+      if (message !== lastChatRefreshError) notify(message);
+      lastChatRefreshError = message;
+    }
+  }, 2500);
+}
+
+async function beginCall(targetUserId, isVideo) {
+  if (activeCall) throw new Error('Finish the current call before starting another.');
+  const call = {
+    isVideo,
+    otherUserId: targetUserId,
+    otherName: (await listConversations(user.id)).find(item => item.id === selectedConversationId)?.otherName || 'Learner',
+    phase: 'outgoing',
+    seenSignals: new Set(),
+    pendingCandidates: []
+  };
+  activeCall = call;
+  try {
+    await beginMedia(call);
+    const created = await startCall(user.id, selectedConversationId, targetUserId, isVideo);
+    Object.assign(call, created);
+    showCallOverlay(call);
+    call.startedAt = Date.now();
+    call.pollTimer = setInterval(() => pollActiveCall(call), 1200);
+  } catch (error) {
+    call.localStream?.getTracks().forEach(track => track.stop());
+    document.getElementById('call-overlay')?.remove();
+    if (activeCall === call) activeCall = null;
+    throw error;
+  }
+}
+
+async function acceptIncomingCall() {
+  const call = activeCall;
+  if (!call || call.phase !== 'incoming') return;
+  try {
+    await beginMedia(call);
+    await respondToCall(user.id, call.id, 'accepted');
+    call.phase = 'connecting';
+    await setupCallPeer(call);
+    showCallOverlay(call);
+    call.pollTimer = setInterval(() => pollActiveCall(call), 1200);
+  } catch (error) {
+    call.localStream?.getTracks().forEach(track => track.stop());
+    if (call.phase === 'connecting') {
+      try {
+        await respondToCall(user.id, call.id, 'ended');
+      } finally {
+        closeCallMedia();
+      }
+    } else {
+      call.localStream = null;
+      call.phase = 'incoming';
+      showCallOverlay(call);
+    }
+    throw error;
+  }
 }
 
 function setSignupSelectOpen(select, open, focusOption = false) {
@@ -110,7 +439,9 @@ async function render(animate = true) {
     try {
       const content = page === 'messages'
         ? await component(user, selectedConversationId, learnerSearchResults, learnerSearch)
-        : await component(user, query);
+        : page === 'groups'
+          ? await component(user, query, selectedGroupChatId)
+          : await component(user, query);
       if (thisRender !== renderVersion) return;
       root.innerHTML = appShell(content, user, animate);
     } catch (error) {
@@ -151,6 +482,16 @@ async function showModal(kind) {
   document.getElementById('create-title').focus();
 }
 
+async function showReviewModal(targetType, targetId, targetName) {
+  const reviews = await listReviews(targetType, targetId);
+  const currentReview = reviews.find(review => (review.reviewer_id || review.reviewerId) === user.id);
+  const rating = currentReview?.rating || 5;
+  const comments = reviews.length
+    ? reviews.map(review => `<article class="review-row"><strong>${escapeText(review.reviewer_name || review.reviewerName || 'Learner')} · ${'★'.repeat(review.rating)}${'☆'.repeat(5 - review.rating)}</strong>${review.comment ? `<p>${escapeText(review.comment)}</p>` : ''}</article>`).join('')
+    : '<p class="settings-hint">No reviews yet.</p>';
+  document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="modal-backdrop"><section class="modal review-modal" role="dialog" aria-modal="true" aria-labelledby="review-modal-title"><div class="modal-head"><h2 id="review-modal-title">Reviews for ${escapeText(targetName)}</h2><button class="modal-close" data-close-modal aria-label="Close">×</button></div><div class="reviews-list">${comments}</div><form id="review-form" data-target-type="${escapeText(targetType)}" data-target-id="${escapeText(targetId)}" data-target-name="${escapeText(targetName)}"><label for="review-rating">Your rating</label><select class="field" id="review-rating" name="rating" required>${[5, 4, 3, 2, 1].map(value => `<option value="${value}"${value === rating ? ' selected' : ''}>${value} ${value === 1 ? 'star' : 'stars'}</option>`).join('')}</select><label for="review-comment">Comment <span class="optional">(optional)</span></label><textarea class="field" id="review-comment" name="comment" maxlength="1000" rows="3" placeholder="Share a helpful, respectful review">${escapeText(currentReview?.comment || '')}</textarea><button class="btn">Save review</button></form></section></div>`);
+}
+
 async function createContent(form) {
   const fields = new FormData(form);
   const common = {
@@ -182,7 +523,7 @@ async function preserveSearch(input) {
 
 document.addEventListener('click', async event => {
   const select = document.querySelector('[data-signup-select]');
-  const target = event.target.closest('[data-page], [data-modal], [data-action], [data-save], [data-join], [data-vote], [data-close-modal], [data-select-trigger], [data-select-option], [data-toggle-password], [data-open-conversation], [data-start-conversation], [data-request-response]');
+  const target = event.target.closest('[data-page], [data-modal], [data-action], [data-save], [data-join], [data-vote], [data-close-modal], [data-select-trigger], [data-select-option], [data-toggle-password], [data-open-conversation], [data-start-conversation], [data-request-response], [data-review-type], [data-group-chat], [data-close-group-chat], [data-start-call], [data-call-action]');
   if (select?.classList.contains('is-open') && !select.contains(event.target)) {
     setSignupSelectOpen(select, false);
   }
@@ -208,6 +549,37 @@ document.addEventListener('click', async event => {
       });
       setSignupSelectOpen(select, false);
       select.querySelector('[data-select-trigger]').focus();
+    } else if (target.dataset.startCall) {
+      const conversation = (await listConversations(user.id)).find(item => item.id === selectedConversationId);
+      if (!conversation || conversation.myStatus !== 'accepted' || conversation.otherStatus !== 'accepted') {
+        throw new Error('Calls are only available for approved conversations.');
+      }
+      await beginCall(conversation.otherUserId, target.dataset.startCall === 'video');
+    } else if (target.dataset.callAction === 'accept') await acceptIncomingCall();
+    else if (target.dataset.callAction === 'reject') await finishCall(false);
+    else if (target.dataset.callAction === 'end') await finishCall();
+    else if (target.dataset.callAction === 'mute') {
+      const track = activeCall?.localStream?.getAudioTracks()[0];
+      if (track) {
+        track.enabled = !track.enabled;
+        target.textContent = track.enabled ? 'Mute' : 'Unmute';
+      }
+    } else if (target.dataset.callAction === 'camera') {
+      const track = activeCall?.localStream?.getVideoTracks()[0];
+      if (track) {
+        track.enabled = !track.enabled;
+        target.textContent = track.enabled ? 'Camera off' : 'Camera on';
+      }
+    } else if (target.hasAttribute('data-group-chat')) {
+      selectedGroupChatId = target.dataset.groupChat;
+      page = 'groups';
+      history.replaceState(null, '', '#groups');
+      await render(false);
+    } else if (target.hasAttribute('data-close-group-chat')) {
+      selectedGroupChatId = '';
+      await render(false);
+    } else if (target.dataset.reviewType) {
+      await showReviewModal(target.dataset.reviewType, target.dataset.reviewTarget, target.dataset.reviewName);
     } else if (target.dataset.openConversation) {
       selectedConversationId = target.dataset.openConversation;
       page = 'messages';
@@ -244,6 +616,9 @@ document.addEventListener('click', async event => {
       await voteQuestion(user.id, target.dataset.vote);
       await render(false);
     } else if (target.dataset.action === 'logout') {
+      clearInterval(callMonitorTimer);
+      clearInterval(chatRefreshTimer);
+      if (activeCall) await finishCall();
       logout();
       user = null;
       page = 'home';
@@ -280,6 +655,8 @@ document.addEventListener('submit', async event => {
       }
       user = authResult.user;
       loadUserTheme(user.id);
+      monitorCalls();
+      monitorChats();
       const requestedPage = sessionStorage.getItem('bright-path:return-to') || 'home';
       sessionStorage.removeItem('bright-path:return-to');
       page = requestedPage;
@@ -301,20 +678,22 @@ document.addEventListener('submit', async event => {
       sessionStorage.removeItem('bright-path:return-to');
       page = requestedPage;
       history.replaceState(null, '', `#${page}`);
+      monitorCalls();
+      monitorChats();
       await render();
       notify(`Welcome to Bright Path, ${user.name}!`);
     } catch (error) {
       notify(error.message || 'We could not confirm your email. Check the code and try again.');
     }
-    if (form.id === 'learner-search-form') {
-      event.preventDefault();
-      learnerSearch = String(new FormData(form).get('search') || '').trim();
-      try {
-        learnerSearchResults = await searchLearners(learnerSearch);
-        await render(false);
-      } catch (error) {
-        notify(error.message || 'Could not search learners.');
-      }
+  }
+  if (form.id === 'learner-search-form') {
+    event.preventDefault();
+    learnerSearch = String(new FormData(form).get('search') || '').trim();
+    try {
+      learnerSearchResults = await searchLearners(learnerSearch);
+      await render(false);
+    } catch (error) {
+      notify(error.message || 'Could not search learners.');
     }
   }
   if (form.id === 'create-form') {
@@ -331,6 +710,50 @@ document.addEventListener('submit', async event => {
       await render(false);
       notify('Message sent.');
     } catch (error) { notify(error.message || 'Could not send the message.'); }
+  }
+  if (form.id === 'group-message-form') {
+    event.preventDefault();
+    const data = new FormData(form);
+    try {
+      await sendGroupMessage(user.id, form.dataset.groupId, {
+        text: data.get('text'),
+        image: data.get('image')?.size ? data.get('image') : null,
+        senderName: user.name
+      });
+      await render(false);
+      notify('Group message sent.');
+    } catch (error) {
+      notify(error.message || 'Could not send the group message.');
+    }
+  }
+  if (form.matches('.question-answer-form')) {
+    event.preventDefault();
+    const body = String(new FormData(form).get('body') || '').trim();
+    try {
+      await createAnswer(user.id, form.dataset.questionId, { body, authorName: user.name });
+      await render(false);
+      notify('Your answer was posted.');
+    } catch (error) {
+      notify(error.message || 'Could not post your answer.');
+    }
+  }
+  if (form.id === 'review-form') {
+    event.preventDefault();
+    const data = new FormData(form);
+    try {
+      await saveReview(user.id, {
+        targetType: form.dataset.targetType,
+        targetId: form.dataset.targetId,
+        reviewerName: user.name,
+        rating: data.get('rating'),
+        comment: data.get('comment')
+      });
+      document.getElementById('modal-backdrop')?.remove();
+      await render(false);
+      notify('Your review was saved.');
+    } catch (error) {
+      notify(error.message || 'Could not save your review.');
+    }
   }
   if (form.id === 'profile-form') {
     event.preventDefault();
@@ -402,5 +825,9 @@ window.addEventListener('popstate', () => {
   page = location.hash.slice(1) || 'home';
   render();
 });
-if (user) loadUserTheme(user.id);
+if (user) {
+  loadUserTheme(user.id);
+  monitorCalls();
+  monitorChats();
+}
 render();

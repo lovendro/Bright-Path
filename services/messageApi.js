@@ -102,15 +102,16 @@ export async function respondToConversationRequest(userId, conversationId, accep
   writeStore(CONVERSATIONS, conversations);
 }
 
-export async function listConversationMessages(userId, conversationId) {
+export async function listConversationMessages(userId, conversationId, after = '') {
   const conversation = (await listConversations(userId)).find(item => item.id === conversationId);
   if (!conversation || conversation.myStatus !== 'accepted' || conversation.otherStatus !== 'accepted') return [];
   if (isSupabaseConfigured) {
     return (await remoteSelect('chat_messages',
-      `select=*&conversation_id=eq.${encodeURIComponent(conversationId)}&order=created_at.asc`))
+      `select=*&conversation_id=eq.${encodeURIComponent(conversationId)}${after ? `&created_at=gt.${encodeURIComponent(after)}` : ''}&order=created_at.asc`))
       .map(row => ({ id: row.id, senderId: row.sender_id, text: row.body, createdAt: row.created_at }));
   }
-  return readStore(localMessagesKey(conversationId), []);
+  const messages = readStore(localMessagesKey(conversationId), []);
+  return after ? messages.filter(message => message.createdAt > after) : messages;
 }
 
 export async function sendChatMessage(userId, conversationId, text) {

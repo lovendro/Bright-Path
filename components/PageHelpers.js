@@ -9,9 +9,14 @@ export async function resourceCards(items, userId) {
   const savedIds = await savedResourceIds(userId);
   return `<div class="resource-grid">${items.map(item => `<article class="resource-card"><div class="resource-art"><div class="resource-placeholder">▤</div><span class="filetag">${escapeText(item.type || 'Resource')}</span></div><div class="resource-info"><h3>${escapeText(item.title)}</h3><p>${escapeText(item.subject || 'General')} · ${escapeText(item.level || 'All levels')}</p><div class="resource-actions"><span>Shared by ${escapeText(item.authorName || 'a learner')}</span><button class="save-btn" data-save="${escapeText(item.id)}">${savedIds.includes(item.id) ? '✓ Saved' : '♡ Save'}</button></div></div></article>`).join('')}</div>`;
 }
-export function groupRows(groups, userId) {
+export function groupRows(groups, userId, reviewsByGroup = {}) {
   if (!groups.length) return emptyState('No study groups yet', 'Create the first group and invite learners to work together.', '<button class="btn btn-sm" data-modal="group">＋ Create a group</button>');
-  return `<div class="groups-list">${groups.map(group => `<div class="group-row"><div class="group-avatar">♧</div><div class="group-details"><h3>${escapeText(group.name)}</h3><p>${escapeText(group.description)}</p></div><span class="group-count">${group.memberIds?.length || 1} members</span><button class="join-btn ${group.memberIds?.includes(userId) ? 'joined' : ''}" data-join="${escapeText(group.id)}">${group.memberIds?.includes(userId) ? 'Joined' : 'Join'}</button></div>`).join('')}</div>`;
+  return `<div class="groups-list">${groups.map(group => {
+    const joined = group.memberIds?.includes(userId);
+    const reviews = reviewsByGroup[group.id] || [];
+    const average = reviews.length ? (reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length).toFixed(1) : '';
+    return `<div class="group-row"><div class="group-avatar">♧</div><div class="group-details"><h3>${escapeText(group.name)}</h3><p>${escapeText(group.description)}</p><span class="group-review-summary">${average ? `${average} ★ · ${reviews.length} ${reviews.length === 1 ? 'review' : 'reviews'}` : 'No reviews yet'}</span></div><span class="group-count">${group.memberIds?.length || 1} members</span>${joined ? `<button class="btn btn-light btn-sm" data-review-type="group" data-review-target="${escapeText(group.id)}" data-review-name="${escapeText(group.name)}">Review</button><button class="btn btn-sm" data-group-chat="${escapeText(group.id)}">Open chat</button>` : `<button class="join-btn" data-join="${escapeText(group.id)}">Join</button>`}</div>`;
+  }).join('')}</div>`;
 }
 export function questionRows(questions) {
   if (!questions.length) return emptyState('No questions yet', 'Post a question to get help from learners in the community.', '<button class="btn btn-sm" data-modal="question">＋ Ask a question</button>');
