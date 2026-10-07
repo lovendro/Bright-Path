@@ -32,8 +32,11 @@ export async function register({ name, email, password, level }) {
       data: { full_name: name.trim(), level }
     });
     const hasSession = Boolean(response.access_token && response.refresh_token);
-    if (hasSession) saveRemoteSession(response);
-    return { user: mapRemoteUser(response.user), needsEmailConfirmation: !hasSession };
+    if (!hasSession || !response.user) {
+      throw new Error('Supabase did not sign you in after signup. To skip email verification, turn off Confirm email in Supabase: Authentication → Sign In / Providers → Email.');
+    }
+    saveRemoteSession(response);
+    return { user: mapRemoteUser(response.user) };
   }
   const accounts = readStore(ACCOUNTS, []);
   const normalizedEmail = email.trim().toLowerCase();
@@ -49,20 +52,7 @@ export async function register({ name, email, password, level }) {
   writeStore(ACCOUNTS, [...accounts, account]);
   const user = { id: account.id, name: account.name, email: account.email, level: account.level, createdAt: account.createdAt };
   writeStore(SESSION, user);
-  return { user, needsEmailConfirmation: false };
-}
-
-export async function confirmEmail({ email, token }) {
-  const response = await supabaseAuth('verify', {
-    email: email.trim().toLowerCase(),
-    token: token.trim(),
-    type: 'signup'
-  });
-  if (!response.access_token || !response.refresh_token || !response.user) {
-    throw new Error('Email confirmation did not return a valid session. Request a new confirmation email and try again.');
-  }
-  saveRemoteSession(response);
-  return mapRemoteUser(response.user);
+  return { user };
 }
 
 export async function login({ email, password }) {
@@ -71,7 +61,7 @@ export async function login({ email, password }) {
       email: email.trim().toLowerCase(), password
     });
     saveRemoteSession(response);
-    return { user: mapRemoteUser(response.user), needsEmailConfirmation: false };
+    return { user: mapRemoteUser(response.user) };
   }
   const normalizedEmail = email.trim().toLowerCase();
   const account = readStore(ACCOUNTS, []).find(item => item.email === normalizedEmail);
@@ -80,7 +70,7 @@ export async function login({ email, password }) {
   }
   const user = { id: account.id, name: account.name, email: account.email, level: account.level, createdAt: account.createdAt };
   writeStore(SESSION, user);
-  return { user, needsEmailConfirmation: false };
+  return { user };
 }
 
 export function currentUser() {

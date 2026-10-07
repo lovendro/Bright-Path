@@ -1,9 +1,8 @@
-import { confirmEmail, currentUser, login, logout, register, createResource, createGroup, createQuestion, createAnswer, createDiscussion, toggleSavedResource, joinGroup, voteQuestion, markNotificationsRead, updateProfile, getProfile, respondToConversationRequest, searchLearners, sendChatMessage, startConversation, listReviews, saveReview, sendGroupMessage, listGroupMessages, startCall, listRingingCalls, getCall, respondToCall, markCallMissed, sendCallSignal as publishCallSignal, listCallSignals, clearCallSignals, listConversations, listConversationMessages } from './services/index.js';
+import { currentUser, login, logout, register, createResource, createGroup, createQuestion, createAnswer, createDiscussion, toggleSavedResource, joinGroup, voteQuestion, markNotificationsRead, updateProfile, getProfile, respondToConversationRequest, searchLearners, sendChatMessage, startConversation, listReviews, saveReview, sendGroupMessage, listGroupMessages, startCall, listRingingCalls, getCall, respondToCall, markCallMissed, sendCallSignal as publishCallSignal, listCallSignals, clearCallSignals, listConversations, listConversationMessages } from './services/index.js';
 import { appShell, escapeText } from './components/Navigation.js';
 import { LandingPage } from './components/pages/LandingPage.js';
 import { SignupPage } from './components/pages/SignupPage.js';
 import { LoginPage } from './components/pages/LoginPage.js';
-import { ConfirmEmailPage } from './components/pages/ConfirmEmailPage.js';
 import { HomePage } from './components/pages/HomePage.js';
 import { ResourcesPage } from './components/pages/ResourcesPage.js';
 import { StudyGroupsPage } from './components/pages/StudyGroupsPage.js';
@@ -31,7 +30,7 @@ const components = {
 };
 let user = currentUser();
 let page = location.hash.slice(1) || 'home';
-let pendingConfirmationEmail = sessionStorage.getItem('bright-path:confirmation-email') || '';
+sessionStorage.removeItem('bright-path:confirmation-email');
 let query = '';
 let selectedConversationId = '';
 let selectedGroupChatId = '';
@@ -433,7 +432,6 @@ async function render(animate = true) {
   if (protectedPages.has(page) && !user) page = 'login';
   if (page === 'signup') root.innerHTML = SignupPage();
   else if (page === 'login') root.innerHTML = LoginPage();
-  else if (page === 'confirm') root.innerHTML = ConfirmEmailPage(pendingConfirmationEmail);
   else if (protectedPages.has(page) && user) {
     const component = components[page];
     try {
@@ -643,16 +641,6 @@ document.addEventListener('submit', async event => {
       const authResult = form.dataset.auth === 'signup'
         ? await register({ name: data.get('name'), email: data.get('email'), password: data.get('password'), level: data.get('level') })
         : await login({ email: data.get('email'), password: data.get('password') });
-      if (authResult.needsEmailConfirmation) {
-        user = null;
-        pendingConfirmationEmail = String(data.get('email')).trim().toLowerCase();
-        sessionStorage.setItem('bright-path:confirmation-email', pendingConfirmationEmail);
-        page = 'confirm';
-        history.replaceState(null, '', '#confirm');
-        await render();
-        notify('Check your email for a 6-digit confirmation code.');
-        return;
-      }
       user = authResult.user;
       loadUserTheme(user.id);
       monitorCalls();
@@ -665,25 +653,6 @@ document.addEventListener('submit', async event => {
       notify(`Welcome to Bright Path, ${user.name}!`);
     } catch (error) {
       notify(error.message || 'We could not complete your account request.');
-    }
-  }
-  if (form.id === 'confirm-email-form') {
-    event.preventDefault();
-    const data = new FormData(form);
-    try {
-      user = await confirmEmail({ email: data.get('email'), token: data.get('token') });
-      pendingConfirmationEmail = '';
-      sessionStorage.removeItem('bright-path:confirmation-email');
-      const requestedPage = sessionStorage.getItem('bright-path:return-to') || 'home';
-      sessionStorage.removeItem('bright-path:return-to');
-      page = requestedPage;
-      history.replaceState(null, '', `#${page}`);
-      monitorCalls();
-      monitorChats();
-      await render();
-      notify(`Welcome to Bright Path, ${user.name}!`);
-    } catch (error) {
-      notify(error.message || 'We could not confirm your email. Check the code and try again.');
     }
   }
   if (form.id === 'learner-search-form') {
