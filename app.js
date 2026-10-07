@@ -174,20 +174,6 @@ function updateCallControl(button, icon, label, active = false) {
   const labelElement = button.querySelector('.call-control-label');
   if (iconElement) iconElement.innerHTML = callIcons[icon];
   if (labelElement) labelElement.textContent = label;
-  const phase = document.getElementById('call-phase-label');
-  if (phase) phase.textContent = message;
-  document.getElementById('call-overlay')?.classList.toggle('call-is-connected', message === 'Connected');
-}
-
-function updateCallControl(button, icon, label, active = false) {
-  if (!button) return;
-  button.setAttribute('aria-label', label);
-  button.title = label;
-  button.classList.toggle('is-active', active);
-  const iconElement = button.querySelector('.call-control-icon');
-  const labelElement = button.querySelector('.call-control-label');
-  if (iconElement) iconElement.innerHTML = callIcons[icon];
-  if (labelElement) labelElement.textContent = label;
 }
 
 function closeCallMedia() {
