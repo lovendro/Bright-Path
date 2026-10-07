@@ -15,6 +15,30 @@
 .hero-copy { animation: rise-in .68s cubic-bezier(.2,.75,.25,1) both; }
 .hero-image { animation: photo-in .8s .12s cubic-bezier(.2,.75,.25,1) both; }
 .image-note { animation: note-float 4.4s ease-in-out infinite; }
+.password-field { position: relative; }
+.auth-panel .password-field input { padding-right: 58px; }
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  padding: 4px;
+  transform: translateY(-50%);
+  border: 0;
+  background: transparent;
+  color: #32784b;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.password-toggle:hover { color: #205d39; }
+.password-strength { display: grid; gap: 5px; margin-top: 8px; color: #768078; font-size: 10px; }
+.password-strength[hidden] { display: none; }
+.password-strength-track { height: 4px; overflow: hidden; border-radius: 4px; background: #edf0e9; }
+.password-strength-track span { display: block; width: 0; height: 100%; border-radius: inherit; transition: width .22s ease, background-color .22s ease; }
+.password-strength[data-strength="1"] .password-strength-track span { width: 25%; background: #c75a4a; }
+.password-strength[data-strength="2"] .password-strength-track span { width: 50%; background: #d09a35; }
+.password-strength[data-strength="3"] .password-strength-track span { width: 75%; background: #6b9b50; }
+.password-strength[data-strength="4"] .password-strength-track span { width: 100%; background: #32784b; }
 .signup-select-label { display: block; margin: 15px 0 7px; font-size: 11px; font-weight: 700; }
 .signup-select { position: relative; }
 .signup-select-trigger {

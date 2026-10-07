@@ -53,6 +53,31 @@ function setSignupSelectOpen(select, open, focusOption = false) {
   }
 }
 
+function updatePasswordStrength(password) {
+  const strength = document.querySelector('[data-password-strength]');
+  const meter = strength?.querySelector('[role="meter"]');
+  const label = strength?.querySelector('#password-strength-text');
+  if (!strength || !meter || !label) return;
+  if (!password) {
+    strength.hidden = true;
+    return;
+  }
+  const score = [
+    password.length >= 8,
+    password.length >= 12,
+    /[a-z]/.test(password) && /[A-Z]/.test(password),
+    /\d/.test(password),
+    /[^A-Za-z0-9]/.test(password)
+  ].filter(Boolean).length;
+  const level = score <= 1 ? 1 : score <= 2 ? 2 : score <= 3 ? 3 : 4;
+  const labelText = ['', 'Weak', 'Fair', 'Good', 'Strong'][level];
+  strength.hidden = false;
+  strength.dataset.strength = String(level);
+  meter.setAttribute('aria-valuenow', String(level));
+  meter.setAttribute('aria-valuetext', labelText);
+  label.textContent = `Password strength: ${labelText}`;
+}
+
 async function render(animate = true) {
   const thisRender = ++renderVersion;
   const root = document.getElementById('app');
@@ -139,13 +164,21 @@ async function preserveSearch(input) {
 
 document.addEventListener('click', async event => {
   const select = document.querySelector('[data-signup-select]');
-  const target = event.target.closest('[data-page], [data-modal], [data-action], [data-save], [data-join], [data-vote], [data-close-modal], [data-select-trigger], [data-select-option]');
+  const target = event.target.closest('[data-page], [data-modal], [data-action], [data-save], [data-join], [data-vote], [data-close-modal], [data-select-trigger], [data-select-option], [data-toggle-password]');
   if (select?.classList.contains('is-open') && !select.contains(event.target)) {
     setSignupSelectOpen(select, false);
   }
   if (!target) return;
   try {
-    if (target.hasAttribute('data-select-trigger')) {
+    if (target.hasAttribute('data-toggle-password')) {
+      const password = document.getElementById('password');
+      const visible = password.type === 'password';
+      password.type = visible ? 'text' : 'password';
+      target.textContent = visible ? 'Hide' : 'Show';
+      target.setAttribute('aria-label', visible ? 'Hide password' : 'Show password');
+      target.setAttribute('aria-pressed', String(visible));
+      password.focus();
+    } else if (target.hasAttribute('data-select-trigger')) {
       const isOpen = target.getAttribute('aria-expanded') === 'true';
       setSignupSelectOpen(select, !isOpen, !isOpen);
     } else if (target.hasAttribute('data-select-option')) {
@@ -264,6 +297,7 @@ document.addEventListener('submit', async event => {
 });
 
 document.addEventListener('input', event => {
+  if (event.target.id === 'password') updatePasswordStrength(event.target.value);
   if (event.target.id === 'page-search' || event.target.id === 'global-search') preserveSearch(event.target);
 });
 
