@@ -1,4 +1,4 @@
-import { currentUser, login, logout, register, createResource, createGroup, createQuestion, createAnswer, createDiscussion, toggleSavedResource, joinGroup, voteQuestion, markNotificationsRead, updateProfile, getProfile, respondToConversationRequest, searchLearners, sendChatMessage, startConversation, listReviews, saveReview, sendGroupMessage, listGroupMessages, startCall, listRingingCalls, getCall, respondToCall, markCallMissed, sendCallSignal as publishCallSignal, listCallSignals, clearCallSignals, listConversations, listConversationMessages } from './services/index.js';
+import { currentUser, login, logout, register, createResource, createGroup, createQuestion, createAnswer, createDiscussion, toggleSavedResource, joinGroup, voteQuestion, markNotificationsRead, updateProfile, updateProfilePicture, getProfile, respondToConversationRequest, searchLearners, sendChatMessage, startConversation, listReviews, saveReview, sendGroupMessage, listGroupMessages, startCall, listRingingCalls, getCall, respondToCall, markCallMissed, sendCallSignal as publishCallSignal, listCallSignals, clearCallSignals, listConversations, listConversationMessages } from './services/index.js';
 import { appShell, escapeText } from './components/Navigation.js';
 import { LandingPage } from './components/pages/LandingPage.js';
 import { SignupPage } from './components/pages/SignupPage.js';
@@ -639,7 +639,7 @@ function navigate(nextPage) {
 async function showModal(kind) {
   if (kind === 'edit-profile') {
     const profile = await getProfile(user.id) || {};
-    document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Edit profile</h2><button class="modal-close" data-close-modal aria-label="Close">×</button></div><form id="profile-form"><label for="profile-bio">About me</label><textarea class="field" id="profile-bio" name="bio" maxlength="500" placeholder="A little about your learning journey">${escapeText(profile.bio || '')}</textarea><label for="profile-interests">Learning interests</label><input class="field" id="profile-interests" name="interests" maxlength="200" placeholder="e.g. biology, design, history" value="${escapeText(profile.interests || '')}"><button class="btn">Save profile</button></form></section></div>`);
+    document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title"><div class="modal-head"><h2 id="profile-modal-title">Edit profile</h2><button class="modal-close" data-close-modal aria-label="Close">×</button></div><form id="profile-form"><label class="profile-photo-label" for="profile-photo">Profile picture</label><div class="profile-photo-picker"><div class="profile-photo-preview">${profile.avatarUrl ? `<img src="${escapeText(profile.avatarUrl)}" alt="Current profile picture">` : `<span aria-hidden="true">${escapeText(user.name[0] || '?')}</span>`}</div><div class="profile-photo-controls"><input class="profile-photo-input" id="profile-photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp" aria-label="Choose a profile picture"><label class="profile-photo-button" for="profile-photo">Choose photo</label><span class="attachment-hint">JPG, PNG, or WebP · up to 5 MB</span></div></div><label for="profile-bio">About me</label><textarea class="field" id="profile-bio" name="bio" maxlength="500" placeholder="A little about your learning journey">${escapeText(profile.bio || '')}</textarea><label for="profile-interests">Learning interests</label><input class="field" id="profile-interests" name="interests" maxlength="200" placeholder="e.g. biology, design, history" value="${escapeText(profile.interests || '')}"><button class="btn" type="submit">Save profile</button></form></section></div>`);
     return;
   }
   const config = {
@@ -737,6 +737,8 @@ document.addEventListener('click', async event => {
       });
       setSignupSelectOpen(select, false);
       select.querySelector('[data-select-trigger]').focus();
+    } else if (target.dataset.action === 'edit-profile') {
+      await showModal('edit-profile');
     } else if (target.dataset.startCall) {
       const conversation = (await listConversations(user.id)).find(item => item.id === selectedConversationId);
       if (!conversation || conversation.myStatus !== 'accepted' || conversation.otherStatus !== 'accepted') {
@@ -937,6 +939,8 @@ document.addEventListener('submit', async event => {
     const data = new FormData(form);
     try {
       await updateProfile(user.id, { bio: data.get('bio'), interests: data.get('interests'), level: user.level });
+      const photo = data.get('photo');
+      if (photo instanceof File && photo.size > 0) await updateProfilePicture(user.id, photo);
       document.getElementById('modal-backdrop')?.remove();
       await render(false);
       notify('Profile updated.');
@@ -965,6 +969,22 @@ document.addEventListener('input', event => {
 });
 
 document.addEventListener('change', event => {
+  if (event.target.id === 'profile-photo') {
+    const file = event.target.files?.[0];
+    const preview = document.querySelector('.profile-photo-preview');
+    if (!preview || !file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+      event.target.value = '';
+      notify('Choose a JPG, PNG, or WebP profile picture up to 5 MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.addEventListener('load', () => {
+      preview.innerHTML = `<img src="${escapeText(String(reader.result))}" alt="Selected profile picture preview">`;
+    }, { once: true });
+    reader.readAsDataURL(file);
+    return;
+  }
   if (event.target.id !== 'create-attachments') return;
   const files = [...event.target.files];
   const selection = document.getElementById('attachment-selection');

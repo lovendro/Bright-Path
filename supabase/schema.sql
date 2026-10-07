@@ -13,6 +13,7 @@ create table if not exists public.profiles (
   level text not null default 'Independent Learner',
   bio text not null default '',
   interests text not null default '',
+  avatar_path text,
   is_public boolean not null default false,
   theme text not null default 'system' check (theme in ('light', 'dark', 'system')),
   created_at timestamptz not null default now()
@@ -20,6 +21,7 @@ create table if not exists public.profiles (
 
 alter table public.profiles
   add column if not exists is_public boolean not null default false,
+  add column if not exists avatar_path text,
   add column if not exists theme text not null default 'system'
     check (theme in ('light', 'dark', 'system'));
 
@@ -978,5 +980,31 @@ create policy "Learners can delete their own community attachments"
   on storage.objects for delete to authenticated
   using (
     bucket_id = 'community-uploads'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+  );
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('profile-photos', 'profile-photos', false, 5242880, array['image/jpeg', 'image/png', 'image/webp'])
+on conflict (id) do update set
+  public = false,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "Learners can upload their own profile pictures" on storage.objects;
+drop policy if exists "Authenticated learners can view profile pictures" on storage.objects;
+drop policy if exists "Learners can delete their own profile pictures" on storage.objects;
+create policy "Learners can upload their own profile pictures"
+  on storage.objects for insert to authenticated
+  with check (
+    bucket_id = 'profile-photos'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+  );
+create policy "Authenticated learners can view profile pictures"
+  on storage.objects for select to authenticated
+  using (bucket_id = 'profile-photos');
+create policy "Learners can delete their own profile pictures"
+  on storage.objects for delete to authenticated
+  using (
+    bucket_id = 'profile-photos'
     and (storage.foldername(name))[1] = (select auth.uid())::text
   );
