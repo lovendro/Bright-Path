@@ -104,6 +104,27 @@ function startRingbackTone() {
   const ring = () => {
     if (!activeCall || !['incoming', 'outgoing'].includes(activeCall.phase) || activeCall.isRingbackMuted) return;
     const now = callAudioContext.currentTime;
+    if (activeCall.phase === 'incoming') {
+      for (const start of [now, now + 0.58]) {
+        const duration = 0.38;
+        const gain = callAudioContext.createGain();
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.11, start + 0.035);
+        gain.gain.setValueAtTime(0.11, start + duration * 0.72);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+        gain.connect(callAudioContext.destination);
+        for (const frequency of [440, 480]) {
+          const oscillator = callAudioContext.createOscillator();
+          oscillator.type = 'sine';
+          oscillator.frequency.value = frequency;
+          oscillator.connect(gain);
+          oscillator.start(start);
+          oscillator.stop(start + duration + 0.02);
+        }
+        setTimeout(() => gain.disconnect(), (start - now + duration + 0.1) * 1000);
+      }
+      return;
+    }
     const gain = callAudioContext.createGain();
     gain.gain.setValueAtTime(0.0001, now);
     gain.gain.exponentialRampToValueAtTime(0.07, now + 0.12);
@@ -122,7 +143,7 @@ function startRingbackTone() {
   };
   callAudioContext.resume().then(() => {
     ring();
-    ringbackTimer = setInterval(ring, 4000);
+    ringbackTimer = setInterval(ring, activeCall?.phase === 'incoming' ? 2800 : 4000);
   }).catch(callSoundUnavailable);
 }
 
