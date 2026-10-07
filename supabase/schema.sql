@@ -33,8 +33,11 @@ create table if not exists public.resources (
   author_id uuid not null references auth.users(id) on delete cascade,
   author_name text not null default 'Learner',
   created_at timestamptz not null default now(),
+  attachments jsonb not null default '[]'::jsonb,
   likes integer not null default 0 check (likes >= 0)
 );
+alter table public.resources
+  add column if not exists attachments jsonb not null default '[]'::jsonb;
 
 create table if not exists public.study_groups (
   id uuid primary key default gen_random_uuid(),
@@ -88,8 +91,11 @@ create table if not exists public.discussions (
   author_id uuid not null references auth.users(id) on delete cascade,
   author_name text not null default 'Learner',
   reply_count integer not null default 0 check (reply_count >= 0),
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  attachments jsonb not null default '[]'::jsonb
 );
+alter table public.discussions
+  add column if not exists attachments jsonb not null default '[]'::jsonb;
 
 -- Prototype direct messages are private to the owning account. A full chat
 -- implementation will need conversations and recipient/membership tables.
@@ -823,4 +829,42 @@ create policy "Group members can view chat images"
       select member.group_id::text from public.group_members member
       where member.user_id = (select auth.uid())
     )
+  );
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'community-uploads',
+  'community-uploads',
+  false,
+  15728640,
+  array[
+    'image/jpeg', 'image/png', 'image/webp', 'application/pdf',
+    'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  ]
+)
+on conflict (id) do update set
+  public = false,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "Learners can upload their own community attachments" on storage.objects;
+drop policy if exists "Authenticated learners can view community attachments" on storage.objects;
+drop policy if exists "Learners can delete their own community attachments" on storage.objects;
+create policy "Learners can upload their own community attachments"
+  on storage.objects for insert to authenticated
+  with check (
+    bucket_id = 'community-uploads'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+    and (storage.foldername(name))[2] in ('resources', 'discussions')
+  );
+create policy "Authenticated learners can view community attachments"
+  on storage.objects for select to authenticated
+  using (bucket_id = 'community-uploads');
+create policy "Learners can delete their own community attachments"
+  on storage.objects for delete to authenticated
+  using (
+    bucket_id = 'community-uploads'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
   );

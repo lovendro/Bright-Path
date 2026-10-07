@@ -69,9 +69,12 @@ export function remoteSelect(table, query = 'select=*') { return request(`${tabl
 export function remoteRpc(functionName, body) {
   return request(`rpc/${encodeURIComponent(functionName)}`, { method: 'POST', body });
 }
-export async function remoteStorageRequest(path, { method = 'GET', body, contentType, upsert = false } = {}) {
+export async function remoteStorageRequest(path, { method = 'GET', body, contentType, upsert = false, retry = true } = {}) {
   if (!isSupabaseConfigured) throw new Error('Supabase is not configured.');
-  const session = getRemoteSession();
+  let session = getRemoteSession();
+  if (session?.expires_at && Date.now() / 1000 > session.expires_at - 30) {
+    session = await refreshSession();
+  }
   const headers = {
     apikey: SUPABASE_PUBLISHABLE_KEY,
     Authorization: `Bearer ${session?.access_token || SUPABASE_PUBLISHABLE_KEY}`
@@ -80,6 +83,10 @@ export async function remoteStorageRequest(path, { method = 'GET', body, content
   if (upsert) headers['x-upsert'] = 'true';
   const response = await fetch(`${SUPABASE_URL}/storage/v1/${path}`, { method, headers, body });
   const data = await responseJson(response);
+  if (response.status === 401 && retry && session?.refresh_token) {
+    await refreshSession();
+    return remoteStorageRequest(path, { method, body, contentType, upsert, retry: false });
+  }
   if (!response.ok) throw remoteError(data, response);
   return data;
 }

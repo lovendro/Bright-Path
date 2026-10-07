@@ -616,7 +616,10 @@ async function showModal(kind) {
   }[kind];
   if (!config) return;
   const [title, titleLabel, detailPlaceholder, submitLabel] = config;
-  document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modal-head"><h2 id="modal-title">${title}</h2><button class="modal-close" data-close-modal aria-label="Close">×</button></div><form id="create-form" data-kind="${kind}"><label for="create-title">${titleLabel}</label><input class="field" id="create-title" name="title" required maxlength="140" placeholder="${titleLabel}">${kind === 'resource' || kind === 'question' ? `<label for="create-subject">Subject <span class="optional">(optional)</span></label><input class="field" id="create-subject" name="subject" maxlength="60" placeholder="e.g. Biology">` : ''}<label for="create-description">Details</label><textarea class="field" id="create-description" name="description" required maxlength="3000" placeholder="${detailPlaceholder}"></textarea>${kind === 'resource' ? '<label for="create-type">Resource type</label><select class="field" id="create-type" name="type"><option>Notes</option><option>Study guide</option><option>Article</option><option>Practice questions</option><option>Other</option></select>' : ''}<button class="btn">${submitLabel}</button></form></section></div>`);
+  const attachmentField = ['resource', 'discussion'].includes(kind)
+    ? '<label for="create-attachments">Pictures or documents <span class="optional">(optional)</span></label><input class="field attachment-input" id="create-attachments" name="attachments" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,image/jpeg,image/png,image/webp,application/pdf" multiple><span class="attachment-hint">JPG, PNG, WebP, PDF, Word, PowerPoint, or Excel · up to 5 files, 15 MB each (25 MB total)</span>'
+    : '';
+  document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modal-head"><h2 id="modal-title">${title}</h2><button class="modal-close" data-close-modal aria-label="Close">×</button></div><form id="create-form" data-kind="${kind}"><label for="create-title">${titleLabel}</label><input class="field" id="create-title" name="title" required maxlength="140" placeholder="${titleLabel}">${kind === 'resource' || kind === 'question' ? `<label for="create-subject">Subject <span class="optional">(optional)</span></label><input class="field" id="create-subject" name="subject" maxlength="60" placeholder="e.g. Biology">` : ''}<label for="create-description">Details</label><textarea class="field" id="create-description" name="description" required maxlength="3000" placeholder="${detailPlaceholder}"></textarea>${kind === 'resource' ? '<label for="create-type">Resource type</label><select class="field" id="create-type" name="type"><option>Notes</option><option>Study guide</option><option>Article</option><option>Practice questions</option><option>Other</option></select>' : ''}${attachmentField}<button class="btn">${submitLabel}</button></form></section></div>`);
   document.getElementById('create-title').focus();
 }
 
@@ -636,7 +639,8 @@ async function createContent(form) {
     title: String(fields.get('title')).trim(),
     description: String(fields.get('description')).trim(),
     subject: String(fields.get('subject') || '').trim(),
-    authorName: user.name
+    authorName: user.name,
+    files: fields.getAll('attachments').filter(file => file instanceof File && file.size > 0)
   };
   const kind = form.dataset.kind;
   if (kind === 'resource') await createResource(user.id, { ...common, type: String(fields.get('type') || 'Notes'), level: user.level });
@@ -647,7 +651,7 @@ async function createContent(form) {
   page = ({ resource: 'resources', group: 'groups', question: 'qa', discussion: 'community' })[kind];
   history.replaceState(null, '', `#${page}`);
   render();
-  notify('Your first contribution is live in this browser.');
+  notify('Your contribution has been shared.');
 }
 
 async function preserveSearch(input) {
@@ -833,8 +837,12 @@ document.addEventListener('submit', async event => {
   }
   if (form.id === 'create-form') {
     event.preventDefault();
+    const submitButton = form.querySelector('button[type="submit"], button:not([type])');
+    if (submitButton?.disabled) return;
+    if (submitButton) submitButton.disabled = true;
     try { await createContent(form); }
     catch (error) { notify(error.message || 'Could not save your contribution.'); }
+    finally { if (submitButton) submitButton.disabled = false; }
   }
   if (form.id === 'chat-message-form') {
     event.preventDefault();

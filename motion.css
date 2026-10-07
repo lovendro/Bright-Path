@@ -354,6 +354,37 @@
   animation: rise-in .48s ease-out both;
 }
 
+.modal-backdrop { overflow-y: auto; }
+.modal { max-height: calc(100vh - 36px); overflow-y: auto; }
+.attachment-input { padding: 10px; font-size: 11px; }
+.attachment-hint { display: block; margin-top: 6px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.community-attachments { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 9px; }
+.community-attachment {
+  display: inline-flex;
+  max-width: 100%;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
+  overflow: hidden;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--cream);
+  color: var(--green);
+  font-size: 10px;
+  font-weight: 700;
+}
+.community-attachment:hover { border-color: #a9c5a8; background: #eff5eb; }
+.community-attachment-icon { flex: 0 0 auto; font-size: 15px; }
+.community-attachment-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.community-attachment.is-image { display: block; width: min(100%, 250px); padding: 5px; }
+.community-attachment.is-image img { display: block; width: 100%; max-height: 190px; border-radius: 5px; object-fit: cover; }
+.community-attachment.is-image .community-attachment-name { display: block; padding: 5px 3px 1px; }
+.resource-info .resource-description { display: -webkit-box; margin-top: 7px; overflow: hidden; color: var(--ink); font-size: 10px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.forum-row-content { flex: 1; min-width: 0; }
+.forum-row-content > p:first-of-type { margin: 5px 0; color: var(--ink); line-height: 1.5; overflow-wrap: anywhere; }
+.forum-row-content > p + p { margin-top: 7px; }
+
 .mobile-island { display: none; }
 
 @media (max-width: 680px) {

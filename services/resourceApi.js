@@ -1,20 +1,35 @@
 import { makeId, readStore, scopedKey, writeStore } from './storage.js';
 import { isSupabaseConfigured } from './supabaseConfig.js';
 import { remoteDelete, remoteInsert, remoteSelect } from './supabaseClient.js';
+import { deleteCommunityAttachments, resolveCommunityAttachments, uploadCommunityAttachments } from './communityAttachmentApi.js';
 const key = 'resources';
 const fromRemote = row => ({ ...row, ownerId: row.owner_id, authorName: row.author_name, createdAt: row.created_at });
 export async function listResources() {
-  if (isSupabaseConfigured) return (await remoteSelect('resources', 'select=*&order=created_at.desc')).map(fromRemote);
+  if (isSupabaseConfigured) return Promise.all((await remoteSelect('resources', 'select=*&order=created_at.desc'))
+    .map(async row => ({ ...fromRemote(row), attachments: await resolveCommunityAttachments(row.attachments || []) })));
   return readStore(key, []);
 }
 export async function createResource(userId, input) {
   if (isSupabaseConfigured) {
-    const [row] = await remoteInsert('resources', {
-      title: input.title, description: input.description, subject: input.subject,
-      type: input.type, level: input.level, author_id: userId, author_name: input.authorName
-    });
-    return fromRemote(row);
+    const attachments = await uploadCommunityAttachments(userId, 'resources', input.files);
+    let row;
+    try {
+      [row] = await remoteInsert('resources', {
+        title: input.title, description: input.description, subject: input.subject,
+        type: input.type, level: input.level, author_id: userId, author_name: input.authorName,
+        attachments
+      });
+    } catch (error) {
+      try {
+        await deleteCommunityAttachments(attachments);
+      } catch (cleanupError) {
+        throw new Error(`${error.message} The uploaded attachments could not be cleaned up: ${cleanupError.message}`);
+      }
+      throw error;
+    }
+    return { ...fromRemote(row), attachments: await resolveCommunityAttachments(row.attachments || []) };
   }
+  if (input.files?.length) throw new Error('File uploads require the connected Supabase project.');
   const item = { id: makeId(), ...input, ownerId: userId, createdAt: new Date().toISOString(), likes: 0 };
   writeStore(key, [item, ...readStore(key, [])]);
   return item;
