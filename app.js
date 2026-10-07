@@ -146,6 +146,10 @@ function showCallOverlay(call) {
     const localVideo = document.getElementById('local-video');
     localVideo.srcObject = call.localStream;
     localVideo.classList.toggle('is-camera-muted', !call.localStream.getVideoTracks()[0]?.enabled);
+    localVideo.play().catch(error => {
+      if (error.name === 'NotAllowedError') setCallStatus('Camera preview playback was blocked by your browser.');
+      else notify(error.message || 'Could not play your camera preview.');
+    });
   }
   if (call.remoteStream) {
     const media = call.isVideo ? document.getElementById('remote-video') : document.getElementById('remote-audio');
@@ -206,11 +210,31 @@ async function setupCallPeer(call) {
   call.peer = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
   call.localStream.getTracks().forEach(track => call.peer.addTrack(track, call.localStream));
   call.peer.ontrack = event => {
-    call.remoteStream = event.streams[0];
+    const remoteStream = call.remoteStream || new MediaStream();
+    if (!remoteStream.getTracks().includes(event.track)) {
+      remoteStream.addTrack(event.track);
+    }
+    call.remoteStream = remoteStream;
     const element = call.isVideo ? document.getElementById('remote-video') : document.getElementById('remote-audio');
-    if (element) element.srcObject = call.remoteStream;
-    document.querySelector('.call-peer-card')?.setAttribute('hidden', '');
-    document.querySelector('.call-stage')?.classList.remove('is-ringing');
+    if (element) {
+      if (element.srcObject !== remoteStream) {
+        element.srcObject = remoteStream;
+        element.play().catch(error => {
+          if (error.name === 'NotAllowedError') {
+            setCallStatus(call.isVideo ? 'Video playback was blocked by your browser.' : 'Audio playback was blocked by your browser.');
+          } else {
+            notify(error.message || 'Could not play the other learner call media.');
+          }
+        });
+      }
+    }
+    const receivedCallMedia = call.isVideo
+      ? remoteStream.getVideoTracks().length > 0
+      : remoteStream.getAudioTracks().length > 0;
+    if (receivedCallMedia) {
+      document.querySelector('.call-peer-card')?.setAttribute('hidden', '');
+      document.querySelector('.call-stage')?.classList.remove('is-ringing');
+    }
   };
   call.peer.onicecandidate = event => {
     if (!event.candidate || activeCall !== call) return;

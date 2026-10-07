@@ -1,5 +1,5 @@
 import { makeId, readStore, scopedKey, writeStore } from './storage.js';
-import { isSupabaseConfigured } from './supabaseConfig.js';
+import { isSupabaseConfigured, SUPABASE_URL } from './supabaseConfig.js';
 import { remoteInsert, remoteSelect, remoteStorageRequest } from './supabaseClient.js';
 const key = 'groups';
 const fromRemote = row => ({
@@ -47,7 +47,11 @@ async function signedGroupImage(path) {
     { method: 'POST', contentType: 'application/json', body: JSON.stringify({ expiresIn: 3600 }) }
   );
   if (!result?.signedURL) throw new Error('Could not load the group image.');
-  return result.signedURL;
+  if (/^https?:\/\//i.test(result.signedURL)) return result.signedURL;
+  const signedPath = result.signedURL.startsWith('/storage/v1/')
+    ? result.signedURL
+    : `/storage/v1/${result.signedURL.replace(/^\/+/, '')}`;
+  return new URL(signedPath, SUPABASE_URL).href;
 }
 
 export async function listGroupMessages(groupId, after = '') {
