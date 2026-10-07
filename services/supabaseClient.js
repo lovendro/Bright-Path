@@ -66,6 +66,9 @@ async function request(path, { method = 'GET', body, prefer = '', retry = true }
 }
 
 export function remoteSelect(table, query = 'select=*') { return request(`${table}?${query}`); }
+export function remoteRpc(functionName, body) {
+  return request(`rpc/${encodeURIComponent(functionName)}`, { method: 'POST', body });
+}
 export function remoteInsert(table, rows, { query = 'select=*', upsert = false, ignoreDuplicates = false } = {}) {
   const prefer = `return=representation${upsert ? ',resolution=merge-duplicates' : ''}${ignoreDuplicates ? ',resolution=ignore-duplicates' : ''}`;
   return request(`${table}?${query}`, { method: 'POST', body: rows, prefer });

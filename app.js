@@ -1,4 +1,4 @@
-import { confirmEmail, currentUser, login, logout, register, createResource, createGroup, createQuestion, createDiscussion, toggleSavedResource, joinGroup, voteQuestion, createMessage, markNotificationsRead, updateProfile, getProfile } from './services/index.js';
+import { confirmEmail, currentUser, login, logout, register, createResource, createGroup, createQuestion, createDiscussion, toggleSavedResource, joinGroup, voteQuestion, markNotificationsRead, updateProfile, getProfile, respondToConversationRequest, searchLearners, sendChatMessage, startConversation } from './services/index.js';
 import { appShell, escapeText } from './components/Navigation.js';
 import { LandingPage } from './components/pages/LandingPage.js';
 import { SignupPage } from './components/pages/SignupPage.js';
@@ -13,8 +13,9 @@ import { AILearningHubPage } from './components/pages/AILearningHubPage.js';
 import { MessagesPage } from './components/pages/MessagesPage.js';
 import { NotificationsPage } from './components/pages/NotificationsPage.js';
 import { ProfilePage } from './components/pages/ProfilePage.js';
+import { SettingsPage } from './components/pages/SettingsPage.js';
 
-const protectedPages = new Set(['home', 'resources', 'groups', 'qa', 'community', 'ai', 'messages', 'notifications', 'profile']);
+const protectedPages = new Set(['home', 'resources', 'groups', 'qa', 'community', 'ai', 'messages', 'notifications', 'profile', 'settings']);
 const components = {
   home: HomePage,
   resources: ResourcesPage,
@@ -24,12 +25,16 @@ const components = {
   ai: AILearningHubPage,
   messages: MessagesPage,
   notifications: NotificationsPage,
-  profile: ProfilePage
+  profile: ProfilePage,
+  settings: SettingsPage
 };
 let user = currentUser();
 let page = location.hash.slice(1) || 'home';
 let pendingConfirmationEmail = sessionStorage.getItem('bright-path:confirmation-email') || '';
 let query = '';
+let selectedConversationId = '';
+let learnerSearch = '';
+let learnerSearchResults = [];
 let toastTimer;
 let renderVersion = 0;
 
@@ -78,6 +83,17 @@ function updatePasswordStrength(password) {
   label.textContent = `Password strength: ${labelText}`;
 }
 
+function applyTheme(theme = 'system') {
+  const useDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.dataset.theme = useDark ? 'dark' : 'light';
+}
+
+function loadUserTheme(userId) {
+  getProfile(userId)
+    .then(profile => applyTheme(profile?.theme || 'system'))
+    .catch(error => notify(error.message || 'Could not load your saved theme setting.'));
+}
+
 async function render(animate = true) {
   const thisRender = ++renderVersion;
   const root = document.getElementById('app');
@@ -92,7 +108,9 @@ async function render(animate = true) {
   else if (protectedPages.has(page) && user) {
     const component = components[page];
     try {
-      const content = await component(user, query);
+      const content = page === 'messages'
+        ? await component(user, selectedConversationId, learnerSearchResults, learnerSearch)
+        : await component(user, query);
       if (thisRender !== renderVersion) return;
       root.innerHTML = appShell(content, user, animate);
     } catch (error) {
@@ -164,7 +182,7 @@ async function preserveSearch(input) {
 
 document.addEventListener('click', async event => {
   const select = document.querySelector('[data-signup-select]');
-  const target = event.target.closest('[data-page], [data-modal], [data-action], [data-save], [data-join], [data-vote], [data-close-modal], [data-select-trigger], [data-select-option], [data-toggle-password]');
+  const target = event.target.closest('[data-page], [data-modal], [data-action], [data-save], [data-join], [data-vote], [data-close-modal], [data-select-trigger], [data-select-option], [data-toggle-password], [data-open-conversation], [data-start-conversation], [data-request-response]');
   if (select?.classList.contains('is-open') && !select.contains(event.target)) {
     setSignupSelectOpen(select, false);
   }
@@ -190,6 +208,25 @@ document.addEventListener('click', async event => {
       });
       setSignupSelectOpen(select, false);
       select.querySelector('[data-select-trigger]').focus();
+    } else if (target.dataset.openConversation) {
+      selectedConversationId = target.dataset.openConversation;
+      page = 'messages';
+      history.replaceState(null, '', '#messages');
+      await render(false);
+    } else if (target.dataset.startConversation) {
+      const conversation = await startConversation(user.id, target.dataset.startConversation);
+      selectedConversationId = conversation.id;
+      page = 'messages';
+      history.replaceState(null, '', '#messages');
+      await render(false);
+      notify(conversation.recipientStatus === 'pending'
+        ? 'Message request sent. You can chat after it is approved.'
+        : 'Conversation opened.');
+    } else if (target.dataset.requestResponse) {
+      await respondToConversationRequest(user.id, target.dataset.conversationId, target.dataset.requestResponse === 'accept');
+      selectedConversationId = target.dataset.conversationId;
+      await render(false);
+      notify(target.dataset.requestResponse === 'accept' ? 'Message request accepted.' : 'Message request declined.');
     } else if (target.dataset.page) {
       event.preventDefault();
       navigate(target.dataset.page);
@@ -242,6 +279,7 @@ document.addEventListener('submit', async event => {
         return;
       }
       user = authResult.user;
+      loadUserTheme(user.id);
       const requestedPage = sessionStorage.getItem('bright-path:return-to') || 'home';
       sessionStorage.removeItem('bright-path:return-to');
       page = requestedPage;
@@ -268,18 +306,28 @@ document.addEventListener('submit', async event => {
     } catch (error) {
       notify(error.message || 'We could not confirm your email. Check the code and try again.');
     }
+    if (form.id === 'learner-search-form') {
+      event.preventDefault();
+      learnerSearch = String(new FormData(form).get('search') || '').trim();
+      try {
+        learnerSearchResults = await searchLearners(learnerSearch);
+        await render(false);
+      } catch (error) {
+        notify(error.message || 'Could not search learners.');
+      }
+    }
   }
   if (form.id === 'create-form') {
     event.preventDefault();
     try { await createContent(form); }
     catch (error) { notify(error.message || 'Could not save your contribution.'); }
   }
-  if (form.id === 'message-form') {
+  if (form.id === 'chat-message-form') {
     event.preventDefault();
     const text = String(new FormData(form).get('text')).trim();
     if (!text) return;
     try {
-      await createMessage(user.id, { text });
+      await sendChatMessage(user.id, selectedConversationId, text);
       await render(false);
       notify('Message sent.');
     } catch (error) { notify(error.message || 'Could not send the message.'); }
@@ -293,6 +341,21 @@ document.addEventListener('submit', async event => {
       await render(false);
       notify('Profile updated.');
     } catch (error) { notify(error.message || 'Could not update your profile.'); }
+  }
+  if (form.id === 'settings-form') {
+    event.preventDefault();
+    const data = new FormData(form);
+    try {
+      const settings = await updateProfile(user.id, {
+        isPublic: data.get('isPublic') === 'on',
+        theme: data.get('theme')
+      });
+      applyTheme(settings.theme);
+      await render(false);
+      notify('Settings saved.');
+    } catch (error) {
+      notify(error.message || 'Could not save your settings.');
+    }
   }
 });
 
@@ -339,4 +402,5 @@ window.addEventListener('popstate', () => {
   page = location.hash.slice(1) || 'home';
   render();
 });
+if (user) loadUserTheme(user.id);
 render();

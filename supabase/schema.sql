@@ -13,8 +13,15 @@ create table if not exists public.profiles (
   level text not null default 'Independent Learner',
   bio text not null default '',
   interests text not null default '',
+  is_public boolean not null default false,
+  theme text not null default 'system' check (theme in ('light', 'dark', 'system')),
   created_at timestamptz not null default now()
 );
+
+alter table public.profiles
+  add column if not exists is_public boolean not null default false,
+  add column if not exists theme text not null default 'system'
+    check (theme in ('light', 'dark', 'system'));
 
 create table if not exists public.resources (
   id uuid primary key default gen_random_uuid(),
@@ -100,6 +107,32 @@ create table if not exists public.saved_resources (
   primary key (user_id, resource_id)
 );
 
+create table if not exists public.conversations (
+  id uuid primary key default gen_random_uuid(),
+  kind text not null default 'direct' check (kind in ('direct', 'group')),
+  created_by uuid not null references auth.users(id) on delete cascade,
+  direct_pair_key text unique,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.conversation_members (
+  conversation_id uuid not null references public.conversations(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  display_name text not null default 'Learner',
+  status text not null default 'accepted' check (status in ('pending', 'accepted', 'rejected')),
+  created_at timestamptz not null default now(),
+  primary key (conversation_id, user_id)
+);
+
+create table if not exists public.chat_messages (
+  id uuid primary key default gen_random_uuid(),
+  conversation_id uuid not null references public.conversations(id) on delete cascade,
+  sender_id uuid not null references auth.users(id) on delete cascade,
+  body text not null default '',
+  created_at timestamptz not null default now(),
+  check (length(body) between 1 and 2000)
+);
+
 -- Support efficient list queries used by the site.
 create index if not exists resources_created_at_idx on public.resources (created_at desc);
 create index if not exists study_groups_created_at_idx on public.study_groups (created_at desc);
@@ -107,6 +140,8 @@ create index if not exists questions_created_at_idx on public.questions (created
 create index if not exists discussions_created_at_idx on public.discussions (created_at desc);
 create index if not exists messages_user_created_at_idx on public.messages (user_id, created_at);
 create index if not exists notifications_user_created_at_idx on public.notifications (user_id, created_at desc);
+create index if not exists conversation_members_user_idx on public.conversation_members (user_id, status);
+create index if not exists chat_messages_conversation_created_idx on public.chat_messages (conversation_id, created_at);
 
 -- -----------------------------------------------------------------------------
 -- Triggers
@@ -194,6 +229,9 @@ alter table public.discussions enable row level security;
 alter table public.messages enable row level security;
 alter table public.notifications enable row level security;
 alter table public.saved_resources enable row level security;
+alter table public.conversations enable row level security;
+alter table public.conversation_members enable row level security;
+alter table public.chat_messages enable row level security;
 
 -- Drop only this script's named policies so the file can be safely re-run.
 drop policy if exists "Profiles are readable by their owner" on public.profiles;
@@ -223,6 +261,26 @@ drop policy if exists "Learners can send their own messages" on public.messages;
 drop policy if exists "Learners can read their own notifications" on public.notifications;
 drop policy if exists "Learners can update their own notifications" on public.notifications;
 drop policy if exists "Learners can manage their own saved resources" on public.saved_resources;
+drop policy if exists "Conversation participants can view conversations" on public.conversations;
+drop policy if exists "Conversation participants can view membership" on public.conversation_members;
+drop policy if exists "Recipients can respond to message requests" on public.conversation_members;
+drop policy if exists "Accepted participants can read chat messages" on public.chat_messages;
+drop policy if exists "Accepted participants can send chat messages" on public.chat_messages;
+
+create or replace function public.is_conversation_member(target_conversation_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.conversation_members member
+    where member.conversation_id = target_conversation_id
+      and member.user_id = (select auth.uid())
+  );
+$$;
+grant execute on function public.is_conversation_member(uuid) to authenticated;
 
 create policy "Profiles are readable by their owner"
   on public.profiles for select to authenticated
@@ -315,10 +373,159 @@ create policy "Learners can manage their own saved resources"
   using (user_id = (select auth.uid()))
   with check (user_id = (select auth.uid()));
 
+create policy "Conversation participants can view conversations"
+  on public.conversations for select to authenticated
+  using (public.is_conversation_member(id));
+
+create policy "Conversation participants can view membership"
+  on public.conversation_members for select to authenticated
+  using (public.is_conversation_member(conversation_id));
+
+create policy "Recipients can respond to message requests"
+  on public.conversation_members for update to authenticated
+  using (user_id = (select auth.uid()) and status = 'pending')
+  with check (user_id = (select auth.uid()) and status in ('accepted', 'rejected'));
+
+create policy "Accepted participants can read chat messages"
+  on public.chat_messages for select to authenticated
+  using (exists (
+    select 1 from public.conversation_members member
+    where member.conversation_id = chat_messages.conversation_id
+      and member.user_id = (select auth.uid())
+      and member.status = 'accepted'
+  ));
+
+create policy "Accepted participants can send chat messages"
+  on public.chat_messages for insert to authenticated
+  with check (
+    sender_id = (select auth.uid())
+    and exists (
+      select 1 from public.conversation_members member
+      where member.conversation_id = chat_messages.conversation_id
+        and member.user_id = (select auth.uid())
+        and member.status = 'accepted'
+    )
+  );
+
+create or replace function public.search_learners(search_term text default '')
+returns table (id uuid, full_name text, level text, is_public boolean)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication is required.';
+  end if;
+  return query
+    select p.id, p.full_name, p.level, p.is_public
+    from public.profiles p
+    where p.id <> auth.uid()
+      and p.full_name ilike '%' || left(coalesce(search_term, ''), 80) || '%'
+    order by p.full_name
+    limit 25;
+end;
+$$;
+
+create or replace function public.start_direct_conversation(target_user_id uuid)
+returns table (conversation_id uuid, recipient_status text)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  current_user_id uuid := auth.uid();
+  target_name text;
+  current_name text;
+  target_is_public boolean;
+  pair_key text;
+  direct_id uuid;
+begin
+  if current_user_id is null then
+    raise exception 'Authentication is required.';
+  end if;
+  if target_user_id = current_user_id then
+    raise exception 'You cannot start a conversation with yourself.';
+  end if;
+  select full_name, is_public into target_name, target_is_public
+  from public.profiles where id = target_user_id;
+  if not found then
+    raise exception 'That learner could not be found.';
+  end if;
+  select full_name into current_name from public.profiles where id = current_user_id;
+  pair_key := least(current_user_id::text, target_user_id::text) || ':' ||
+    greatest(current_user_id::text, target_user_id::text);
+
+  select id into direct_id from public.conversations where direct_pair_key = pair_key;
+  if direct_id is null then
+    insert into public.conversations (kind, created_by, direct_pair_key)
+      values ('direct', current_user_id, pair_key)
+      on conflict (direct_pair_key) do update set direct_pair_key = excluded.direct_pair_key
+      returning id into direct_id;
+    insert into public.conversation_members (conversation_id, user_id, display_name, status)
+      values (direct_id, current_user_id, coalesce(current_name, 'Learner'), 'accepted')
+      on conflict (conversation_id, user_id) do nothing;
+    insert into public.conversation_members (conversation_id, user_id, display_name, status)
+      values (direct_id, target_user_id, coalesce(target_name, 'Learner'),
+        case when target_is_public then 'accepted' else 'pending' end)
+      on conflict (conversation_id, user_id) do nothing;
+  end if;
+
+  return query select direct_id, member.status
+    from public.conversation_members member
+    where member.conversation_id = direct_id and member.user_id = target_user_id;
+end;
+$$;
+
+create or replace function public.list_my_conversations()
+returns table (
+  conversation_id uuid,
+  created_at timestamptz,
+  other_user_id uuid,
+  other_name text,
+  my_status text,
+  other_status text
+)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication is required.';
+  end if;
+  return query
+    select conversation.id, conversation.created_at,
+      other_member.user_id, other_member.display_name,
+      own_member.status, other_member.status
+    from public.conversations conversation
+    join public.conversation_members own_member
+      on own_member.conversation_id = conversation.id
+      and own_member.user_id = auth.uid()
+    join public.conversation_members other_member
+      on other_member.conversation_id = conversation.id
+      and other_member.user_id <> auth.uid()
+    where conversation.kind = 'direct'
+    order by conversation.created_at desc;
+end;
+$$;
+
+revoke all on function public.search_learners(text) from public;
+revoke all on function public.start_direct_conversation(uuid) from public;
+revoke all on function public.list_my_conversations() from public;
+revoke all on function public.is_conversation_member(uuid) from public;
+grant execute on function public.search_learners(text) to authenticated;
+grant execute on function public.start_direct_conversation(uuid) to authenticated;
+grant execute on function public.list_my_conversations() to authenticated;
+grant execute on function public.is_conversation_member(uuid) to authenticated;
+
 -- Supabase's authenticated role gets table operations; RLS above limits rows.
 grant usage on schema public to authenticated;
 grant select, insert, update, delete
   on public.profiles, public.resources, public.study_groups, public.group_members,
      public.questions, public.question_votes, public.discussions, public.messages,
-     public.notifications, public.saved_resources
+     public.notifications, public.saved_resources, public.conversations,
+     public.conversation_members, public.chat_messages
   to authenticated;

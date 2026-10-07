@@ -1,7 +1,7 @@
 export const brand = `<a class="brand" href="#home" data-page="home" aria-label="Bright Path home"><span class="brand-mark"><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M16 27V13M16 18C8 18 5 13 6 6c7 0 11 3 10 10Zm0-4c0-7 4-11 11-11 0 7-3 11-11 11Z" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 27h16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></span><span>Bright Path</span></a>`;
 
 const links = [['Home', 'home'], ['Resources', 'resources'], ['Groups', 'groups'], ['Q&A', 'qa'], ['Community', 'community']];
-const sideLinks = [['⌂', 'Home', 'home'], ['▣', 'Resources', 'resources'], ['♧', 'Study Groups', 'groups'], ['?', 'Q&A', 'qa'], ['◉', 'Community', 'community'], ['✦', 'AI Learning Hub', 'ai'], ['✉', 'Messages', 'messages'], ['♧', 'Notifications', 'notifications']];
+const sideLinks = [['⌂', 'Home', 'home'], ['▣', 'Resources', 'resources'], ['♧', 'Study Groups', 'groups'], ['?', 'Q&A', 'qa'], ['◉', 'Community', 'community'], ['✦', 'AI Learning Hub', 'ai'], ['✉', 'Messages', 'messages'], ['♧', 'Notifications', 'notifications'], ['⚙', 'Settings', 'settings']];
 
 export function publicHeader() {
   return `<nav class="landing-nav">${brand}<div class="landing-links">${links.map(([label, page]) => `<a href="#${page}" data-page="${page}">${label}</a>`).join('')}</div><div class="landing-actions"><a class="text-link" href="#login" data-page="login">Log in</a><a class="btn btn-sm" href="#signup" data-page="signup">Sign Up</a></div></nav>`;
