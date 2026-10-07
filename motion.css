@@ -353,6 +353,141 @@
 .page-enter .profile-hero {
   animation: rise-in .48s ease-out both;
 }
+
+.mobile-island { display: none; }
+
+@media (max-width: 680px) {
+  .app-body { display: block; min-height: calc(100vh - 57px); }
+  .app-body .sidebar { display: none; }
+  .main-content { min-height: calc(100vh - 57px); padding-bottom: calc(104px + env(safe-area-inset-bottom)); }
+  .mobile-island {
+    position: fixed;
+    z-index: 20;
+    right: 0;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    left: 0;
+    display: flex;
+    justify-content: center;
+    padding: 0 12px;
+    pointer-events: none;
+  }
+  .mobile-island-dock {
+    display: flex;
+    width: min(100%, 430px);
+    min-height: 64px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 3px;
+    padding: 7px;
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 24px;
+    background: rgba(22, 38, 28, .94);
+    box-shadow: 0 12px 36px rgba(12, 33, 19, .28), inset 0 1px rgba(255,255,255,.08);
+    color: #eaf2e7;
+    backdrop-filter: blur(22px) saturate(1.4);
+    -webkit-backdrop-filter: blur(22px) saturate(1.4);
+    pointer-events: auto;
+  }
+  .mobile-island-link,
+  .mobile-island-more {
+    display: flex;
+    min-width: 0;
+    min-height: 48px;
+    flex: 1 1 0;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    overflow: hidden;
+    padding: 0 9px;
+    border: 0;
+    border-radius: 17px;
+    background: transparent;
+    color: #b9c8bc;
+    text-decoration: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: flex .25s ease, color .2s ease, background .2s ease, transform .2s ease;
+  }
+  .mobile-island-link.active,
+  .mobile-island-more.active {
+    flex-grow: 1.55;
+    background: #e4f1df;
+    color: #205d39;
+  }
+  .mobile-island-link:active,
+  .mobile-island-more:active { transform: scale(.94); }
+  .mobile-island-icon {
+    display: grid;
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    place-items: center;
+    font-size: 20px;
+    line-height: 1;
+  }
+  .mobile-island-more .mobile-island-icon { font-size: 13px; letter-spacing: 1px; }
+  .mobile-island-label {
+    max-width: 0;
+    overflow: hidden;
+    opacity: 0;
+    font-size: 11px;
+    font-weight: 750;
+    white-space: nowrap;
+    transition: max-width .25s ease, opacity .18s ease;
+  }
+  .mobile-island-link.active .mobile-island-label,
+  .mobile-island-more.active .mobile-island-label { max-width: 82px; opacity: 1; }
+  .mobile-island-menu {
+    position: absolute;
+    right: 14px;
+    bottom: calc(100% + 10px);
+    left: 14px;
+    display: grid;
+    width: min(100% - 28px, 360px);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    margin: 0 auto;
+    padding: 9px;
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 23px;
+    background: rgba(22, 38, 28, .96);
+    box-shadow: 0 16px 42px rgba(12, 33, 19, .3);
+    backdrop-filter: blur(22px) saturate(1.4);
+    -webkit-backdrop-filter: blur(22px) saturate(1.4);
+    pointer-events: auto;
+    animation: island-menu-in .2s cubic-bezier(.2,.75,.25,1) both;
+  }
+  .mobile-island-menu[hidden] { display: none; }
+  .mobile-island-menu-link {
+    display: grid;
+    min-height: 68px;
+    align-content: center;
+    justify-items: center;
+    gap: 5px;
+    border: 1px solid transparent;
+    border-radius: 15px;
+    color: #d8e4da;
+    font-size: 10px;
+    font-weight: 650;
+    text-align: center;
+    text-decoration: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mobile-island-menu-link > span:first-child { color: #b8d3b9; font-size: 19px; }
+  .mobile-island-menu-link.active { border-color: rgba(180, 222, 182, .2); background: rgba(228, 241, 223, .12); color: #fff; }
+  .mobile-island-menu-link:active { background: rgba(228, 241, 223, .2); }
+}
+
+@keyframes island-menu-in {
+  from { transform: translateY(8px) scale(.97); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-island-link,
+  .mobile-island-more,
+  .mobile-island-label { transition: none; }
+  .mobile-island-menu { animation: none; }
+}
 .page-enter .quick-card:nth-child(2), .page-enter .ai-guide:nth-child(2) { animation-delay: .05s; }
 .page-enter .quick-card:nth-child(3), .page-enter .ai-guide:nth-child(3) { animation-delay: .1s; }
 .page-enter .quick-card:nth-child(4), .page-enter .ai-guide:nth-child(4) { animation-delay: .15s; }

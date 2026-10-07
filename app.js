@@ -661,14 +661,25 @@ async function preserveSearch(input) {
 
 document.addEventListener('click', async event => {
   const select = document.querySelector('[data-signup-select]');
-  const target = event.target.closest('[data-page], [data-modal], [data-action], [data-save], [data-join], [data-vote], [data-close-modal], [data-select-trigger], [data-select-option], [data-toggle-password], [data-open-conversation], [data-start-conversation], [data-request-response], [data-review-type], [data-group-chat], [data-close-group-chat], [data-start-call], [data-call-action]');
+  const target = event.target.closest('[data-page], [data-modal], [data-action], [data-save], [data-join], [data-vote], [data-close-modal], [data-select-trigger], [data-select-option], [data-toggle-password], [data-open-conversation], [data-start-conversation], [data-request-response], [data-review-type], [data-group-chat], [data-close-group-chat], [data-start-call], [data-call-action], [data-mobile-more]');
   if (user && target) primeCallAudio();
   if (select?.classList.contains('is-open') && !select.contains(event.target)) {
     setSignupSelectOpen(select, false);
   }
+  const mobileIsland = document.querySelector('.mobile-island');
+  const mobileMore = mobileIsland?.querySelector('[data-mobile-more]');
+  if (mobileMore?.getAttribute('aria-expanded') === 'true' && !mobileIsland.contains(event.target)) {
+    mobileMore.setAttribute('aria-expanded', 'false');
+    document.getElementById('mobile-island-menu').hidden = true;
+  }
   if (!target) return;
   try {
-    if (target.hasAttribute('data-toggle-password')) {
+    if (target.hasAttribute('data-mobile-more')) {
+      const menu = document.getElementById('mobile-island-menu');
+      const expanded = target.getAttribute('aria-expanded') === 'true';
+      target.setAttribute('aria-expanded', String(!expanded));
+      menu.hidden = expanded;
+    } else if (target.hasAttribute('data-toggle-password')) {
       const password = document.getElementById('password');
       const visible = password.type === 'password';
       password.type = visible ? 'text' : 'password';
