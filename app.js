@@ -617,7 +617,7 @@ async function showModal(kind) {
   if (!config) return;
   const [title, titleLabel, detailPlaceholder, submitLabel] = config;
   const attachmentField = ['resource', 'discussion'].includes(kind)
-    ? '<label for="create-attachments">Pictures or documents <span class="optional">(optional)</span></label><input class="field attachment-input" id="create-attachments" name="attachments" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,image/jpeg,image/png,image/webp,application/pdf" multiple><span class="attachment-hint">JPG, PNG, WebP, PDF, Word, PowerPoint, or Excel · up to 5 files, 15 MB each (25 MB total)</span>'
+    ? '<span class="attachment-field-label">Pictures or documents <span class="optional">(optional)</span></span><div class="attachment-picker"><input class="attachment-input" id="create-attachments" name="attachments" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,image/jpeg,image/png,image/webp,application/pdf" multiple aria-label="Choose pictures or documents to attach" aria-describedby="attachment-selection attachment-hint"><label class="attachment-picker-button" for="create-attachments"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14.5v3A2.5 2.5 0 0 0 7.5 20h9a2.5 2.5 0 0 0 2.5-2.5v-3"/></svg><span>Choose files</span></label><span class="attachment-selection" id="attachment-selection" aria-live="polite">No files selected</span></div><span class="attachment-hint" id="attachment-hint">JPG, PNG, WebP, PDF, Word, PowerPoint, or Excel · up to 5 files, 15 MB each (25 MB total)</span>'
     : '';
   document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modal-head"><h2 id="modal-title">${title}</h2><button class="modal-close" data-close-modal aria-label="Close">×</button></div><form id="create-form" data-kind="${kind}"><label for="create-title">${titleLabel}</label><input class="field" id="create-title" name="title" required maxlength="140" placeholder="${titleLabel}">${kind === 'resource' || kind === 'question' ? `<label for="create-subject">Subject <span class="optional">(optional)</span></label><input class="field" id="create-subject" name="subject" maxlength="60" placeholder="e.g. Biology">` : ''}<label for="create-description">Details</label><textarea class="field" id="create-description" name="description" required maxlength="3000" placeholder="${detailPlaceholder}"></textarea>${kind === 'resource' ? '<label for="create-type">Resource type</label><select class="field" id="create-type" name="type"><option>Notes</option><option>Study guide</option><option>Article</option><option>Practice questions</option><option>Other</option></select>' : ''}${attachmentField}<button class="btn">${submitLabel}</button></form></section></div>`);
   document.getElementById('create-title').focus();
@@ -928,6 +928,20 @@ document.addEventListener('submit', async event => {
 document.addEventListener('input', event => {
   if (event.target.id === 'password') updatePasswordStrength(event.target.value);
   if (event.target.id === 'page-search' || event.target.id === 'global-search') preserveSearch(event.target);
+});
+
+document.addEventListener('change', event => {
+  if (event.target.id !== 'create-attachments') return;
+  const files = [...event.target.files];
+  const selection = document.getElementById('attachment-selection');
+  if (!selection) return;
+  selection.textContent = files.length
+    ? files.length <= 2
+      ? files.map(file => file.name).join(', ')
+      : `${files[0].name}, ${files[1].name} +${files.length - 2} more`
+    : 'No files selected';
+  selection.title = files.map(file => file.name).join('\n');
+  selection.classList.toggle('has-files', files.length > 0);
 });
 
 document.addEventListener('keydown', event => {

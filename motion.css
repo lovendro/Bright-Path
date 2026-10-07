@@ -356,7 +356,34 @@
 
 .modal-backdrop { overflow-y: auto; }
 .modal { max-height: calc(100vh - 36px); overflow-y: auto; }
-.attachment-input { padding: 10px; font-size: 11px; }
+.attachment-field-label { display: block; margin: 13px 0 6px; font-size: 11px; font-weight: 700; }
+.attachment-picker { display: flex; min-width: 0; align-items: center; gap: 11px; }
+.attachment-input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.attachment-picker-button {
+  display: inline-flex !important;
+  min-height: 42px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin: 0 !important;
+  padding: 0 15px;
+  border: 1px solid #2b7044;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #32784b, #205d39);
+  box-shadow: 0 3px 8px rgba(32, 93, 57, .18), inset 0 1px rgba(255,255,255,.2);
+  color: #fff;
+  font-size: 12px !important;
+  font-weight: 750 !important;
+  cursor: pointer;
+  transition: transform .16s ease, box-shadow .16s ease, background .16s ease;
+}
+.attachment-picker-button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+.attachment-picker-button:hover { transform: translateY(-1px); background: linear-gradient(180deg, #3b8956, #276c40); box-shadow: 0 5px 12px rgba(32, 93, 57, .22), inset 0 1px rgba(255,255,255,.2); }
+.attachment-picker-button:active { transform: translateY(0) scale(.98); }
+.attachment-input:focus-visible + .attachment-picker-button { outline: 3px solid rgba(73, 133, 83, .38); outline-offset: 3px; }
+.attachment-selection { min-width: 0; overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.attachment-selection.has-files { color: var(--green); font-weight: 650; }
 .attachment-hint { display: block; margin-top: 6px; color: var(--muted); font-size: 10px; line-height: 1.5; }
 .community-attachments { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 9px; }
 .community-attachment {
