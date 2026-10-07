@@ -731,11 +731,11 @@ begin
       returning id into direct_id;
     insert into public.conversation_members (conversation_id, user_id, display_name, status)
       values (direct_id, current_user_id, coalesce(current_name, 'Learner'), 'accepted')
-      on conflict (conversation_id, user_id) do nothing;
+      on conflict on constraint conversation_members_pkey do nothing;
     insert into public.conversation_members (conversation_id, user_id, display_name, status)
       values (direct_id, target_user_id, coalesce(target_name, 'Learner'),
         case when target_is_public then 'accepted' else 'pending' end)
-      on conflict (conversation_id, user_id) do nothing;
+      on conflict on constraint conversation_members_pkey do nothing;
   end if;
 
   return query select direct_id, member.status
