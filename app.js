@@ -42,6 +42,9 @@ let activeCall = null;
 let callMonitorTimer = null;
 let callPollInProgress = false;
 let callAudioContext = null;
+const incomingRingtoneAudio = new Audio(new URL('./benkirb-ringtone-1-275863.mp3', import.meta.url));
+incomingRingtoneAudio.loop = true;
+incomingRingtoneAudio.volume = 0.8;
 let ringbackTimer = null;
 let chatRefreshTimer = null;
 let lastChatRefreshError = '';
@@ -70,7 +73,7 @@ function notify(message) {
 
 function primeCallAudio() {
   if (typeof AudioContext === 'undefined') {
-    callSoundUnavailable();
+    if (activeCall?.phase !== 'incoming') callSoundUnavailable();
     return;
   }
   try {
@@ -95,11 +98,18 @@ function callSoundUnavailable() {
 function stopRingbackTone() {
   clearInterval(ringbackTimer);
   ringbackTimer = null;
+  incomingRingtoneAudio.pause();
+  incomingRingtoneAudio.currentTime = 0;
   if (callAudioContext?.state === 'running') callAudioContext.suspend();
 }
 
 function startRingbackTone() {
   stopRingbackTone();
+  if (activeCall?.phase === 'incoming') {
+    if (activeCall.isRingbackMuted) return;
+    incomingRingtoneAudio.play().catch(callSoundUnavailable);
+    return;
+  }
   if (!callAudioContext) return;
   const ring = () => {
     if (!activeCall || !['incoming', 'outgoing'].includes(activeCall.phase) || activeCall.isRingbackMuted) return;
@@ -320,7 +330,9 @@ async function pollActiveCall(call) {
       closeCallMedia();
       notify(session?.status === 'rejected'
         ? 'The call was declined.'
-        : session?.status === 'missed' ? 'There was no answer.' : 'The call ended.');
+        : session?.status === 'missed'
+          ? call.callerId === user.id ? 'Call ended — no answer.' : 'You missed a call.'
+          : 'The call ended.');
       if (page === 'messages') render(false);
       return;
     }
@@ -328,7 +340,7 @@ async function pollActiveCall(call) {
       const missed = await markCallMissed(user.id, call.id);
       if (missed) {
         closeCallMedia();
-        notify('There was no answer.');
+        notify('Call ended — no answer.');
         if (page === 'messages') render(false);
         return;
       }
@@ -372,11 +384,11 @@ function monitorCalls() {
         if (!session || ['ended', 'rejected', 'missed'].includes(session.status)) {
           const status = session?.status;
           closeCallMedia();
-          notify(status === 'missed' ? 'There was no answer.' : 'The call ended.');
+          notify(status === 'missed' ? 'You missed a call.' : 'The call ended.');
           if (page === 'messages') render(false);
         } else if (expired.some(call => call.id === activeCall.id)) {
           closeCallMedia();
-          notify('There was no answer.');
+          notify('You missed a call.');
           if (page === 'messages') render(false);
         }
         return;
@@ -530,6 +542,7 @@ async function acceptIncomingCall() {
       call.localStream = null;
       call.phase = 'incoming';
       showCallOverlay(call);
+      startRingbackTone();
     }
     throw error;
   }

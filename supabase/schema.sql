@@ -354,6 +354,118 @@ create trigger on_question_answer_changed
 after insert or delete on public.question_answers
 for each row execute procedure public.update_question_answer_count();
 
+create or replace function public.notify_pending_message_request()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  requester_name text;
+begin
+  if new.status = 'pending' then
+    select member.display_name into requester_name
+    from public.conversation_members member
+    join public.conversations conversation on conversation.id = member.conversation_id
+    where member.conversation_id = new.conversation_id
+      and member.user_id = conversation.created_by;
+
+    insert into public.notifications (user_id, title, message)
+    select new.user_id, 'New message request',
+      coalesce(requester_name, 'A learner') || ' would like to start a conversation with you.';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_pending_message_request_created on public.conversation_members;
+create trigger on_pending_message_request_created
+after insert on public.conversation_members
+for each row execute procedure public.notify_pending_message_request();
+
+create or replace function public.notify_direct_message()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  sender_name text;
+begin
+  select member.display_name into sender_name
+  from public.conversation_members member
+  where member.conversation_id = new.conversation_id
+    and member.user_id = new.sender_id;
+
+  insert into public.notifications (user_id, title, message)
+  select member.user_id, 'New message',
+    coalesce(sender_name, 'A learner') || ' sent you a message.'
+  from public.conversation_members member
+  where member.conversation_id = new.conversation_id
+    and member.user_id <> new.sender_id
+    and member.status = 'accepted';
+  return new;
+end;
+$$;
+
+drop trigger if exists on_direct_message_created on public.chat_messages;
+create trigger on_direct_message_created
+after insert on public.chat_messages
+for each row execute procedure public.notify_direct_message();
+
+create or replace function public.notify_group_message()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  group_name text;
+begin
+  select study_group.name into group_name
+  from public.study_groups study_group
+  where study_group.id = new.group_id;
+
+  insert into public.notifications (user_id, title, message)
+  select member.user_id, 'New group message',
+    coalesce(new.sender_name, 'A learner') || ' sent a message in ' || coalesce(group_name, 'your study group') || '.'
+  from public.group_members member
+  where member.group_id = new.group_id
+    and member.user_id <> new.sender_id;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_group_message_created on public.group_messages;
+create trigger on_group_message_created
+after insert on public.group_messages
+for each row execute procedure public.notify_group_message();
+
+create or replace function public.notify_missed_call()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  call_kind text;
+begin
+  if new.status = 'missed' and old.status is distinct from new.status then
+    call_kind := case when new.is_video then 'video' else 'audio' end;
+    insert into public.notifications (user_id, title, message)
+    values
+      (new.caller_id, 'Call ended — no answer', 'Your outgoing ' || call_kind || ' call was not answered and has ended.'),
+      (new.callee_id, 'Missed call', 'You missed an incoming ' || call_kind || ' call.');
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_call_missed on public.call_sessions;
+create trigger on_call_missed
+after update of status on public.call_sessions
+for each row execute procedure public.notify_missed_call();
+
 -- -----------------------------------------------------------------------------
 -- Row-level security
 -- -----------------------------------------------------------------------------
