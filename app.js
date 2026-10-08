@@ -456,10 +456,15 @@ async function refreshActiveChat() {
         article.append(time);
         thread.append(article);
       } else {
-        const bubble = document.createElement('div');
+        const bubble = document.createElement('article');
         bubble.className = `bubble ${message.senderId === user.id ? 'mine' : ''}`;
         bubble.dataset.messageId = message.id;
-        bubble.textContent = message.text;
+        const text = document.createElement('p');
+        text.textContent = message.text;
+        const time = document.createElement('time');
+        time.dateTime = message.createdAt;
+        time.textContent = new Date(message.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        bubble.append(text, time);
         thread.append(bubble);
       }
       thread.dataset.latestAt = message.createdAt;
@@ -616,6 +621,10 @@ async function render(animate = true) {
           : await component(user, query);
       if (thisRender !== renderVersion) return;
       root.innerHTML = appShell(content, user, animate);
+      if (page === 'messages') {
+        const thread = root.querySelector('.messages-panel .thread-body');
+        if (thread) thread.scrollTop = thread.scrollHeight;
+      }
     } catch (error) {
       if (thisRender !== renderVersion) return;
       root.innerHTML = appShell(`<section class="panel"><h1>Couldn't load this page</h1><p>${escapeText(error.message || 'Check your connection and Supabase setup, then try again.')}</p><button class="btn btn-sm" data-action="retry">Try again</button></section>`, user, false);
