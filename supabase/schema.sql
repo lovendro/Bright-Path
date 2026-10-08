@@ -174,6 +174,13 @@ create table if not exists public.call_sessions (
   check (caller_id <> callee_id)
 );
 
+create table if not exists public.call_history_hidden (
+  call_id uuid not null references public.call_sessions(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  hidden_at timestamptz not null default now(),
+  primary key (call_id, user_id)
+);
+
 alter table public.call_sessions drop constraint if exists call_sessions_status_check;
 alter table public.call_sessions
   add constraint call_sessions_status_check
@@ -488,6 +495,7 @@ alter table public.conversation_members enable row level security;
 alter table public.chat_messages enable row level security;
 alter table public.group_messages enable row level security;
 alter table public.call_sessions enable row level security;
+alter table public.call_history_hidden enable row level security;
 alter table public.call_signals enable row level security;
 alter table public.reviews enable row level security;
 
@@ -539,6 +547,8 @@ drop policy if exists "Approved contacts can start calls" on public.call_session
 drop policy if exists "Recipients can answer incoming calls" on public.call_sessions;
 drop policy if exists "Call participants can end calls" on public.call_sessions;
 drop policy if exists "Call participants can mark unanswered calls missed" on public.call_sessions;
+drop policy if exists "Learners can view their hidden call history" on public.call_history_hidden;
+drop policy if exists "Learners can hide their own call history" on public.call_history_hidden;
 drop policy if exists "Call participants can read their signals" on public.call_signals;
 drop policy if exists "Call participants can send signals" on public.call_signals;
 drop policy if exists "Call participants can clean up signals" on public.call_signals;
@@ -733,6 +743,20 @@ create policy "Call participants can mark unanswered calls missed"
     (caller_id = (select auth.uid()) or callee_id = (select auth.uid()))
     and status = 'missed'
   );
+create policy "Learners can view their hidden call history"
+  on public.call_history_hidden for select to authenticated
+  using (user_id = (select auth.uid()));
+create policy "Learners can hide their own call history"
+  on public.call_history_hidden for insert to authenticated
+  with check (
+    user_id = (select auth.uid())
+    and exists (
+      select 1 from public.call_sessions session
+      where session.id = call_history_hidden.call_id
+        and (session.caller_id = (select auth.uid()) or session.callee_id = (select auth.uid()))
+        and session.status in ('rejected', 'ended', 'missed')
+    )
+  );
 create policy "Call participants can read their signals"
   on public.call_signals for select to authenticated
   using (sender_id = (select auth.uid()) or target_id = (select auth.uid()));
@@ -898,13 +922,38 @@ begin
 end;
 $$;
 
+create or replace function public.hide_my_call_history()
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  hidden_count integer;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication is required.';
+  end if;
+  insert into public.call_history_hidden (call_id, user_id)
+  select session.id, auth.uid()
+  from public.call_sessions session
+  where (session.caller_id = auth.uid() or session.callee_id = auth.uid())
+    and session.status in ('rejected', 'ended', 'missed')
+  on conflict (call_id, user_id) do nothing;
+  get diagnostics hidden_count = row_count;
+  return hidden_count;
+end;
+$$;
+
 revoke all on function public.search_learners(text) from public;
 revoke all on function public.start_direct_conversation(uuid) from public;
 revoke all on function public.list_my_conversations() from public;
+revoke all on function public.hide_my_call_history() from public;
 revoke all on function public.is_conversation_member(uuid) from public;
 grant execute on function public.search_learners(text) to authenticated;
 grant execute on function public.start_direct_conversation(uuid) to authenticated;
 grant execute on function public.list_my_conversations() to authenticated;
+grant execute on function public.hide_my_call_history() to authenticated;
 grant execute on function public.is_conversation_member(uuid) to authenticated;
 
 -- Supabase's authenticated role gets table operations; RLS above limits rows.
@@ -914,7 +963,8 @@ grant select, insert, update, delete
      public.questions, public.question_votes, public.discussions, public.messages,
      public.question_answers, public.notifications, public.saved_resources,
      public.conversations, public.conversation_members, public.chat_messages,
-     public.reviews, public.group_messages, public.call_sessions, public.call_signals
+     public.reviews, public.group_messages, public.call_sessions, public.call_history_hidden,
+     public.call_signals
   to authenticated;
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

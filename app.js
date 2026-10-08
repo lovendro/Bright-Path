@@ -1,4 +1,4 @@
-import { currentUser, login, logout, register, createResource, createGroup, createQuestion, createAnswer, createDiscussion, toggleSavedResource, joinGroup, voteQuestion, markNotificationsRead, updateProfile, updateProfilePicture, getProfile, respondToConversationRequest, searchLearners, sendChatMessage, startConversation, listReviews, saveReview, sendGroupMessage, listGroupMessages, startCall, listRingingCalls, getCall, respondToCall, markCallMissed, sendCallSignal as publishCallSignal, listCallSignals, clearCallSignals, listConversations, listConversationMessages } from './services/index.js';
+import { currentUser, login, logout, register, createResource, createGroup, createQuestion, createAnswer, createDiscussion, toggleSavedResource, joinGroup, voteQuestion, markNotificationsRead, updateProfile, updateProfilePicture, getProfile, respondToConversationRequest, searchLearners, sendChatMessage, startConversation, listReviews, saveReview, sendGroupMessage, listGroupMessages, startCall, listRingingCalls, getCall, respondToCall, markCallMissed, sendCallSignal as publishCallSignal, listCallSignals, clearCallSignals, clearCallHistory, hideCallHistory, listConversations, listConversationMessages } from './services/index.js';
 import { appShell, escapeText } from './components/Navigation.js';
 import { LandingPage } from './components/pages/LandingPage.js';
 import { SignupPage } from './components/pages/SignupPage.js';
@@ -708,7 +708,7 @@ async function preserveSearch(input) {
 
 document.addEventListener('click', async event => {
   const select = document.querySelector('[data-signup-select]');
-  const target = event.target.closest('[data-page], [data-modal], [data-action], [data-save], [data-join], [data-vote], [data-close-modal], [data-select-trigger], [data-select-option], [data-toggle-password], [data-open-conversation], [data-start-conversation], [data-request-response], [data-review-type], [data-group-chat], [data-close-group-chat], [data-start-call], [data-call-action], [data-mobile-more]');
+  const target = event.target.closest('[data-page], [data-modal], [data-action], [data-save], [data-join], [data-vote], [data-close-modal], [data-select-trigger], [data-select-option], [data-toggle-password], [data-open-conversation], [data-start-conversation], [data-request-response], [data-review-type], [data-group-chat], [data-close-group-chat], [data-start-call], [data-call-action], [data-mobile-more], [data-hide-call], [data-clear-call-history]');
   if (user && target) primeCallAudio();
   if (select?.classList.contains('is-open') && !select.contains(event.target)) {
     setSignupSelectOpen(select, false);
@@ -748,6 +748,29 @@ document.addEventListener('click', async event => {
       select.querySelector('[data-select-trigger]').focus();
     } else if (target.dataset.action === 'edit-profile') {
       await showModal('edit-profile');
+    } else if (target.hasAttribute('data-hide-call')) {
+      const name = target.dataset.callName || 'this learner';
+      if (!window.confirm(`Remove this call with ${name} from your history? The other participant will still see it.`)) return;
+      target.disabled = true;
+      try {
+        await hideCallHistory(user.id, target.dataset.hideCall);
+        await render(false);
+        notify('Call removed from your history.');
+      } catch (error) {
+        target.disabled = false;
+        throw error;
+      }
+    } else if (target.hasAttribute('data-clear-call-history')) {
+      if (!window.confirm('Clear all calls from your history? This only affects your account; other participants’ histories are unchanged.')) return;
+      target.disabled = true;
+      try {
+        await clearCallHistory();
+        await render(false);
+        notify('Call history cleared.');
+      } catch (error) {
+        target.disabled = false;
+        throw error;
+      }
     } else if (target.dataset.startCall) {
       const conversation = (await listConversations(user.id)).find(item => item.id === selectedConversationId);
       if (!conversation || conversation.myStatus !== 'accepted' || conversation.otherStatus !== 'accepted') {

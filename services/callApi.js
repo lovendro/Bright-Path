@@ -1,5 +1,5 @@
 import { isSupabaseConfigured } from './supabaseConfig.js';
-import { remoteDelete, remoteInsert, remoteSelect, remoteUpdate } from './supabaseClient.js';
+import { remoteDelete, remoteInsert, remoteRpc, remoteSelect, remoteUpdate } from './supabaseClient.js';
 
 function requireSupabase() {
   if (!isSupabaseConfigured) throw new Error('Audio and video calls require the connected Supabase project.');
@@ -43,9 +43,24 @@ export async function listRingingCalls(userId) {
 
 export async function listCallHistory(userId) {
   requireSupabase();
-  return (await remoteSelect('call_sessions',
-    `select=*&or=(caller_id.eq.${encodeURIComponent(userId)},callee_id.eq.${encodeURIComponent(userId)})&order=created_at.desc&limit=50`))
-    .map(mapCall);
+  const [calls, hidden] = await Promise.all([
+    remoteSelect('call_sessions',
+      `select=*&or=(caller_id.eq.${encodeURIComponent(userId)},callee_id.eq.${encodeURIComponent(userId)})&status=in.(rejected,ended,missed)&order=created_at.desc`),
+    remoteSelect('call_history_hidden', `select=call_id&user_id=eq.${encodeURIComponent(userId)}`)
+  ]);
+  const hiddenCallIds = new Set(hidden.map(row => row.call_id));
+  return calls.filter(call => !hiddenCallIds.has(call.id)).map(mapCall);
+}
+
+export async function hideCallHistory(userId, callId) {
+  requireSupabase();
+  if (!callId) throw new Error('Choose a call to remove from your history.');
+  await remoteInsert('call_history_hidden', { call_id: callId, user_id: userId });
+}
+
+export async function clearCallHistory() {
+  requireSupabase();
+  return remoteRpc('hide_my_call_history', {});
 }
 
 export async function getCall(callId) {

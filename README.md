@@ -32,6 +32,8 @@ When Supabase is configured, account creation/sign-in and resources, groups, que
 
 Before a public launch, configure a TURN relay, add moderation/reporting, privacy and retention controls, backups, abuse prevention, and testing for the project's safeguarding requirements. Do not store sensitive student data until those protections are ready.
 
+In Messages, learners can remove individual calls or clear their own call history; these actions do not remove the other participant's records. Run the updated `supabase/schema.sql` to enable call-history management in an existing Supabase project.
+
 ## Kenyan imagery and motion
 
 The landing and account screens use contemporary Kenyan school photos via Wikimedia Commons: [female students at Shela Primary School, Lamu County](https://commons.wikimedia.org/wiki/File:Female_students_at_Shela_Primary_School_-_Lamu_County,_Kenya.jpg) and [a teacher training students in digital literacy](https://commons.wikimedia.org/wiki/File:Kenyan_teacher_training_students.jpg). Both are by Queen Asali and licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/); attribution appears on the site. The images load from Wikimedia and require an internet connection.
