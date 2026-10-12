@@ -107,11 +107,11 @@ export async function listConversationMessages(userId, conversationId, after = '
   if (!conversation || conversation.myStatus !== 'accepted' || conversation.otherStatus !== 'accepted') return [];
   if (isSupabaseConfigured) {
     return (await remoteSelect('chat_messages',
-      `select=*&conversation_id=eq.${encodeURIComponent(conversationId)}${after ? `&created_at=gt.${encodeURIComponent(after)}` : ''}&order=created_at.asc`))
-      .map(row => ({ id: row.id, senderId: row.sender_id, text: row.body, createdAt: row.created_at }));
+      `select=*&conversation_id=eq.${encodeURIComponent(conversationId)}${after ? `&or=${encodeURIComponent(`(created_at.gt.${after},edited_at.gt.${after})`)}` : ''}&order=created_at.asc`))
+      .map(row => ({ id: row.id, senderId: row.sender_id, text: row.body, createdAt: row.created_at, editedAt: row.edited_at }));
   }
   const messages = readStore(localMessagesKey(conversationId), []);
-  return after ? messages.filter(message => message.createdAt > after) : messages;
+  return after ? messages.filter(message => message.createdAt > after || (message.editedAt && message.editedAt > after)) : messages;
 }
 
 export async function listConversationMessageIds(userId, conversationId) {
@@ -158,4 +158,25 @@ export async function unsendChatMessage(userId, conversationId, messageId) {
     throw new Error('This message could not be unsent. It may no longer exist or may not belong to you.');
   }
   writeStore(messagesKey, messages.filter(item => item.id !== messageId));
+}
+
+export async function editChatMessage(userId, conversationId, messageId, text) {
+  const cleaned = text.trim();
+  if (!cleaned || cleaned.length > 2000) throw new Error('Messages must be between 1 and 2,000 characters.');
+  if (isSupabaseConfigured) {
+    const updated = await remoteUpdate('chat_messages',
+      `id=eq.${encodeURIComponent(messageId)}&conversation_id=eq.${encodeURIComponent(conversationId)}&sender_id=eq.${encodeURIComponent(userId)}`,
+      { body: cleaned, edited_at: new Date().toISOString() });
+    if (!updated.length) throw new Error('This message could not be edited. It may no longer exist or may not belong to you.');
+    return;
+  }
+  const messagesKey = localMessagesKey(conversationId);
+  const messages = readStore(messagesKey, []);
+  const message = messages.find(item => item.id === messageId);
+  if (!message || message.senderId !== userId) {
+    throw new Error('This message could not be edited. It may no longer exist or may not belong to you.');
+  }
+  message.text = cleaned;
+  message.editedAt = new Date().toISOString();
+  writeStore(messagesKey, messages);
 }

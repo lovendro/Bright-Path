@@ -149,6 +149,8 @@ create table if not exists public.chat_messages (
   created_at timestamptz not null default now(),
   check (length(body) between 1 and 2000)
 );
+alter table public.chat_messages
+  add column if not exists edited_at timestamptz;
 
 create table if not exists public.group_messages (
   id uuid primary key default gen_random_uuid(),
@@ -161,6 +163,8 @@ create table if not exists public.group_messages (
   check (length(body) <= 2000),
   check (length(body) > 0 or image_path is not null)
 );
+alter table public.group_messages
+  add column if not exists edited_at timestamptz;
 
 create table if not exists public.call_sessions (
   id uuid primary key default gen_random_uuid(),
@@ -532,6 +536,7 @@ drop policy if exists "Conversation participants can view membership" on public.
 drop policy if exists "Recipients can respond to message requests" on public.conversation_members;
 drop policy if exists "Accepted participants can read chat messages" on public.chat_messages;
 drop policy if exists "Accepted participants can send chat messages" on public.chat_messages;
+drop policy if exists "Authors can edit their chat messages" on public.chat_messages;
 drop policy if exists "Authors can unsend their chat messages" on public.chat_messages;
 drop policy if exists "Authenticated learners can read question answers" on public.question_answers;
 drop policy if exists "Learners can answer as themselves" on public.question_answers;
@@ -543,6 +548,7 @@ drop policy if exists "Learners can edit their own reviews" on public.reviews;
 drop policy if exists "Learners can delete their own reviews" on public.reviews;
 drop policy if exists "Group members can read group chat" on public.group_messages;
 drop policy if exists "Group members can send group chat" on public.group_messages;
+drop policy if exists "Authors can edit their group messages" on public.group_messages;
 drop policy if exists "Authors can unsend their group messages" on public.group_messages;
 drop policy if exists "Call participants can view call sessions" on public.call_sessions;
 drop policy if exists "Approved contacts can start calls" on public.call_sessions;
@@ -704,6 +710,24 @@ create policy "Group members can send group chat"
         and member.user_id = (select auth.uid())
     )
   );
+create policy "Authors can edit their group messages"
+  on public.group_messages for update to authenticated
+  using (
+    sender_id = (select auth.uid())
+    and exists (
+      select 1 from public.group_members member
+      where member.group_id = group_messages.group_id
+        and member.user_id = (select auth.uid())
+    )
+  )
+  with check (
+    sender_id = (select auth.uid())
+    and exists (
+      select 1 from public.group_members member
+      where member.group_id = group_messages.group_id
+        and member.user_id = (select auth.uid())
+    )
+  );
 create policy "Authors can unsend their group messages"
   on public.group_messages for delete to authenticated
   using (
@@ -819,6 +843,26 @@ create policy "Accepted participants can read chat messages"
 
 create policy "Accepted participants can send chat messages"
   on public.chat_messages for insert to authenticated
+  with check (
+    sender_id = (select auth.uid())
+    and exists (
+      select 1 from public.conversation_members member
+      where member.conversation_id = chat_messages.conversation_id
+        and member.user_id = (select auth.uid())
+        and member.status = 'accepted'
+    )
+  );
+create policy "Authors can edit their chat messages"
+  on public.chat_messages for update to authenticated
+  using (
+    sender_id = (select auth.uid())
+    and exists (
+      select 1 from public.conversation_members member
+      where member.conversation_id = chat_messages.conversation_id
+        and member.user_id = (select auth.uid())
+        and member.status = 'accepted'
+    )
+  )
   with check (
     sender_id = (select auth.uid())
     and exists (
@@ -1016,6 +1060,17 @@ create policy "Group members can view chat images"
     and (storage.foldername(name))[1] in (
       select member.group_id::text from public.group_members member
       where member.user_id = (select auth.uid())
+    )
+  );
+create policy "Authors can delete their unsent chat images"
+  on storage.objects for delete to authenticated
+  using (
+    bucket_id = 'group-chat'
+    and exists (
+      select 1 from public.group_messages message
+      where message.image_path = name
+        and message.sender_id = (select auth.uid())
+        and message.group_id::text = (storage.foldername(name))[1]
     )
   );
 

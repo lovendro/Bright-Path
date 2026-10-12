@@ -1,4 +1,4 @@
-import { currentUser, login, logout, register, createResource, createGroup, createQuestion, createAnswer, createDiscussion, toggleSavedResource, joinGroup, voteQuestion, markNotificationsRead, updateProfile, updateProfilePicture, getProfile, respondToConversationRequest, searchLearners, sendChatMessage, unsendChatMessage, startConversation, listReviews, saveReview, sendGroupMessage, unsendGroupMessage, listGroupMessages, listGroupMessageIds, startCall, listRingingCalls, getCall, respondToCall, markCallMissed, sendCallSignal as publishCallSignal, listCallSignals, clearCallSignals, clearCallHistory, hideCallHistory, listConversations, listConversationMessages, listConversationMessageIds } from './services/index.js';
+import { currentUser, login, logout, register, createResource, createGroup, createQuestion, createAnswer, createDiscussion, toggleSavedResource, joinGroup, voteQuestion, markNotificationsRead, updateProfile, updateProfilePicture, getProfile, respondToConversationRequest, searchLearners, sendChatMessage, editChatMessage, unsendChatMessage, startConversation, listReviews, saveReview, sendGroupMessage, editGroupMessage, unsendGroupMessage, listGroupMessages, listGroupMessageIds, startCall, listRingingCalls, getCall, respondToCall, markCallMissed, sendCallSignal as publishCallSignal, listCallSignals, clearCallSignals, clearCallHistory, hideCallHistory, listConversations, listConversationMessages, listConversationMessageIds } from './services/index.js';
 import { appShell, escapeText } from './components/Navigation.js';
 import { LandingPage } from './components/pages/LandingPage.js';
 import { SignupPage } from './components/pages/SignupPage.js';
@@ -426,12 +426,52 @@ async function refreshActiveChat() {
   const groupThread = document.querySelector('.group-chat-thread[data-group-id][data-latest-at]');
   if (!directThread && !groupThread) return;
 
+  const appendMessageActions = (article, messageId, kind) => {
+    const actions = document.createElement('div');
+    actions.className = 'message-actions';
+    const trigger = document.createElement('button');
+    trigger.className = 'message-menu-trigger';
+    trigger.type = 'button';
+    trigger.dataset.messageMenuTrigger = '';
+    trigger.setAttribute('aria-label', 'More message options');
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.textContent = '⋮';
+    const menu = document.createElement('div');
+    menu.className = 'message-menu';
+    menu.dataset.messageMenu = '';
+    menu.hidden = true;
+    for (const [action, label] of [['edit', 'Edit message'], ['unsend', 'Unsend message']]) {
+      const option = document.createElement('button');
+      option.type = 'button';
+      option.dataset.messageMenuAction = action;
+      option.dataset.messageKind = kind;
+      option.textContent = label;
+      menu.append(option);
+    }
+    article.dataset.messageId = messageId;
+    actions.append(trigger, menu);
+    article.append(actions);
+  };
+
   const append = (thread, messages, isGroup) => {
     const shouldScroll = thread.scrollHeight - thread.scrollTop - thread.clientHeight < 48;
     thread.querySelector('.settings-hint')?.remove();
     thread.querySelector('.chat-empty')?.remove();
     for (const message of messages) {
-      if (thread.querySelector(`[data-message-id="${CSS.escape(message.id)}"]`)) continue;
+      const existing = thread.querySelector(`[data-message-id="${CSS.escape(message.id)}"]`);
+      if (existing) {
+        const currentText = existing.querySelector('p');
+        if (isGroup) {
+          if (message.text && currentText) currentText.textContent = message.text;
+          else if (message.text) {
+            const text = document.createElement('p');
+            text.textContent = message.text;
+            existing.querySelector('img')?.before(text);
+            if (!existing.querySelector('img')) existing.querySelector('time').before(text);
+          } else currentText?.remove();
+        } else if (currentText) currentText.textContent = message.text;
+        continue;
+      }
       if (isGroup) {
         const article = document.createElement('article');
         article.className = `group-chat-message ${message.senderId === user.id ? 'mine' : ''}`;
@@ -454,16 +494,7 @@ async function refreshActiveChat() {
         const time = document.createElement('time');
         time.textContent = new Date(message.createdAt).toLocaleString();
         article.append(time);
-        if (message.senderId === user.id) {
-          const unsend = document.createElement('button');
-          unsend.className = 'message-unsend';
-          unsend.type = 'button';
-          unsend.dataset.unsendMessage = message.id;
-          unsend.dataset.messageKind = 'group';
-          unsend.setAttribute('aria-label', 'Unsend message for everyone');
-          unsend.textContent = 'Unsend';
-          article.append(unsend);
-        }
+        if (message.senderId === user.id) appendMessageActions(article, message.id, 'group');
         thread.append(article);
       } else {
         const bubble = document.createElement('article');
@@ -475,16 +506,7 @@ async function refreshActiveChat() {
         time.dateTime = message.createdAt;
         time.textContent = new Date(message.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
         bubble.append(text, time);
-        if (message.senderId === user.id) {
-          const unsend = document.createElement('button');
-          unsend.className = 'message-unsend';
-          unsend.type = 'button';
-          unsend.dataset.unsendMessage = message.id;
-          unsend.dataset.messageKind = 'direct';
-          unsend.setAttribute('aria-label', 'Unsend message for everyone');
-          unsend.textContent = 'Unsend';
-          bubble.append(unsend);
-        }
+        if (message.senderId === user.id) appendMessageActions(bubble, message.id, 'direct');
         thread.append(bubble);
       }
       thread.dataset.latestAt = message.createdAt;
@@ -743,7 +765,13 @@ async function preserveSearch(input) {
 
 document.addEventListener('click', async event => {
   const select = document.querySelector('[data-signup-select]');
-  const target = event.target.closest('[data-page], [data-modal], [data-action], [data-save], [data-join], [data-vote], [data-close-modal], [data-select-trigger], [data-select-option], [data-toggle-password], [data-open-conversation], [data-start-conversation], [data-request-response], [data-review-type], [data-group-chat], [data-close-group-chat], [data-start-call], [data-call-action], [data-mobile-more], [data-hide-call], [data-clear-call-history], [data-unsend-message]');
+  const target = event.target.closest('[data-page], [data-modal], [data-action], [data-save], [data-join], [data-vote], [data-close-modal], [data-select-trigger], [data-select-option], [data-toggle-password], [data-open-conversation], [data-start-conversation], [data-request-response], [data-review-type], [data-group-chat], [data-close-group-chat], [data-start-call], [data-call-action], [data-mobile-more], [data-hide-call], [data-clear-call-history], [data-unsend-message], [data-message-menu-trigger], [data-message-menu-action]');
+  if (!event.target.closest('.message-actions')) {
+    document.querySelectorAll('[data-message-menu]').forEach(menu => {
+      menu.hidden = true;
+      menu.parentElement.querySelector('[data-message-menu-trigger]')?.setAttribute('aria-expanded', 'false');
+    });
+  }
   if (user && target) primeCallAudio();
   if (select?.classList.contains('is-open') && !select.contains(event.target)) {
     setSignupSelectOpen(select, false);
@@ -783,20 +811,40 @@ document.addEventListener('click', async event => {
       select.querySelector('[data-select-trigger]').focus();
     } else if (target.dataset.action === 'edit-profile') {
       await showModal('edit-profile');
-    } else if (target.hasAttribute('data-unsend-message')) {
-      if (!window.confirm('Unsend this message for everyone? It will be removed from the conversation, but someone may already have seen it.')) return;
-      target.disabled = true;
-      try {
-        if (target.dataset.messageKind === 'group') {
-          await unsendGroupMessage(user.id, selectedGroupChatId, target.dataset.unsendMessage);
+    } else if (target.hasAttribute('data-message-menu-trigger')) {
+      const menu = target.parentElement.querySelector('[data-message-menu]');
+      const opening = menu.hidden;
+      document.querySelectorAll('[data-message-menu]').forEach(item => {
+        item.hidden = true;
+        item.parentElement.querySelector('[data-message-menu-trigger]')?.setAttribute('aria-expanded', 'false');
+      });
+      menu.hidden = !opening;
+      target.setAttribute('aria-expanded', String(opening));
+    } else if (target.hasAttribute('data-message-menu-action')) {
+      const article = target.closest('[data-message-id]');
+      const messageId = article.dataset.messageId;
+      const kind = target.dataset.messageKind;
+      if (target.dataset.messageMenuAction === 'edit') {
+        const editedText = window.prompt('Edit your message', article.querySelector('p')?.textContent || '');
+        if (editedText === null) return;
+        target.disabled = true;
+        if (kind === 'group') {
+          await editGroupMessage(user.id, selectedGroupChatId, messageId, editedText);
         } else {
-          await unsendChatMessage(user.id, selectedConversationId, target.dataset.unsendMessage);
+          await editChatMessage(user.id, selectedConversationId, messageId, editedText);
+        }
+        await render(false);
+        notify('Message updated.');
+      } else {
+        if (!window.confirm('Unsend this message for everyone? It will be removed from the conversation, but someone may already have seen it.')) return;
+        target.disabled = true;
+        if (kind === 'group') {
+          await unsendGroupMessage(user.id, selectedGroupChatId, messageId);
+        } else {
+          await unsendChatMessage(user.id, selectedConversationId, messageId);
         }
         await render(false);
         notify('Message unsent for everyone.');
-      } catch (error) {
-        target.disabled = false;
-        throw error;
       }
     } else if (target.hasAttribute('data-hide-call')) {
       const name = target.dataset.callName || 'this learner';

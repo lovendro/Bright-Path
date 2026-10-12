@@ -1,6 +1,6 @@
 import { makeId, readStore, scopedKey, writeStore } from './storage.js';
 import { isSupabaseConfigured, SUPABASE_URL } from './supabaseConfig.js';
-import { remoteDelete, remoteInsert, remoteSelect, remoteStorageRequest } from './supabaseClient.js';
+import { remoteDelete, remoteInsert, remoteSelect, remoteStorageRequest, remoteUpdate } from './supabaseClient.js';
 const key = 'groups';
 const fromRemote = row => ({
   ...row, ownerId: row.owner_id, authorName: row.author_name, createdAt: row.created_at,
@@ -60,14 +60,15 @@ export async function listGroupMessages(groupId, after = '') {
     return after ? messages.filter(message => message.createdAt > after) : messages;
   }
   const rows = await remoteSelect('group_messages',
-    `select=*&group_id=eq.${encodeURIComponent(groupId)}${after ? `&created_at=gt.${encodeURIComponent(after)}` : ''}&order=created_at.asc`);
+    `select=*&group_id=eq.${encodeURIComponent(groupId)}${after ? `&or=${encodeURIComponent(`(created_at.gt.${after},edited_at.gt.${after})`)}` : ''}&order=created_at.asc`);
   return Promise.all(rows.map(async row => ({
     id: row.id,
     senderId: row.sender_id,
     senderName: row.sender_name,
     text: row.body,
     imageUrl: row.image_path ? await signedGroupImage(row.image_path) : '',
-    createdAt: row.created_at
+    createdAt: row.created_at,
+    editedAt: row.edited_at
   })));
 }
 
@@ -158,4 +159,30 @@ export async function unsendGroupMessage(userId, groupId, messageId) {
     throw new Error('This message could not be unsent. It may no longer exist or may not belong to you.');
   }
   writeStore(messagesKey, messages.filter(item => item.id !== messageId));
+}
+
+export async function editGroupMessage(userId, groupId, messageId, text) {
+  const cleaned = String(text).trim();
+  if (cleaned.length > 2000) throw new Error('Messages must be 2,000 characters or fewer.');
+  if (isSupabaseConfigured) {
+    const [message] = await remoteSelect('group_messages',
+      `select=id,image_path&group_id=eq.${encodeURIComponent(groupId)}&id=eq.${encodeURIComponent(messageId)}&sender_id=eq.${encodeURIComponent(userId)}`);
+    if (!message) throw new Error('This message could not be edited. It may no longer exist or may not belong to you.');
+    if (!cleaned && !message.image_path) throw new Error('A message must have text or an attached picture.');
+    const updated = await remoteUpdate('group_messages',
+      `id=eq.${encodeURIComponent(messageId)}&group_id=eq.${encodeURIComponent(groupId)}&sender_id=eq.${encodeURIComponent(userId)}`,
+      { body: cleaned, edited_at: new Date().toISOString() });
+    if (!updated.length) throw new Error('This message could not be edited. It may no longer exist or may not belong to you.');
+    return;
+  }
+  const messagesKey = scopedKey(groupId, 'group-messages');
+  const messages = readStore(messagesKey, []);
+  const message = messages.find(item => item.id === messageId);
+  if (!message || message.senderId !== userId) {
+    throw new Error('This message could not be edited. It may no longer exist or may not belong to you.');
+  }
+  if (!cleaned && !message.imageUrl) throw new Error('A message must have text or an attached picture.');
+  message.text = cleaned;
+  message.editedAt = new Date().toISOString();
+  writeStore(messagesKey, messages);
 }
