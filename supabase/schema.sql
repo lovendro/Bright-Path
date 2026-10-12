@@ -532,6 +532,7 @@ drop policy if exists "Conversation participants can view membership" on public.
 drop policy if exists "Recipients can respond to message requests" on public.conversation_members;
 drop policy if exists "Accepted participants can read chat messages" on public.chat_messages;
 drop policy if exists "Accepted participants can send chat messages" on public.chat_messages;
+drop policy if exists "Authors can unsend their chat messages" on public.chat_messages;
 drop policy if exists "Authenticated learners can read question answers" on public.question_answers;
 drop policy if exists "Learners can answer as themselves" on public.question_answers;
 drop policy if exists "Authors can edit their answers" on public.question_answers;
@@ -542,6 +543,7 @@ drop policy if exists "Learners can edit their own reviews" on public.reviews;
 drop policy if exists "Learners can delete their own reviews" on public.reviews;
 drop policy if exists "Group members can read group chat" on public.group_messages;
 drop policy if exists "Group members can send group chat" on public.group_messages;
+drop policy if exists "Authors can unsend their group messages" on public.group_messages;
 drop policy if exists "Call participants can view call sessions" on public.call_sessions;
 drop policy if exists "Approved contacts can start calls" on public.call_sessions;
 drop policy if exists "Recipients can answer incoming calls" on public.call_sessions;
@@ -702,6 +704,16 @@ create policy "Group members can send group chat"
         and member.user_id = (select auth.uid())
     )
   );
+create policy "Authors can unsend their group messages"
+  on public.group_messages for delete to authenticated
+  using (
+    sender_id = (select auth.uid())
+    and exists (
+      select 1 from public.group_members member
+      where member.group_id = group_messages.group_id
+        and member.user_id = (select auth.uid())
+    )
+  );
 
 create policy "Call participants can view call sessions"
   on public.call_sessions for select to authenticated
@@ -808,6 +820,17 @@ create policy "Accepted participants can read chat messages"
 create policy "Accepted participants can send chat messages"
   on public.chat_messages for insert to authenticated
   with check (
+    sender_id = (select auth.uid())
+    and exists (
+      select 1 from public.conversation_members member
+      where member.conversation_id = chat_messages.conversation_id
+        and member.user_id = (select auth.uid())
+        and member.status = 'accepted'
+    )
+  );
+create policy "Authors can unsend their chat messages"
+  on public.chat_messages for delete to authenticated
+  using (
     sender_id = (select auth.uid())
     and exists (
       select 1 from public.conversation_members member
@@ -976,6 +999,7 @@ on conflict (id) do update set
 
 drop policy if exists "Group members can upload chat images" on storage.objects;
 drop policy if exists "Group members can view chat images" on storage.objects;
+drop policy if exists "Authors can delete their unsent chat images" on storage.objects;
 create policy "Group members can upload chat images"
   on storage.objects for insert to authenticated
   with check (

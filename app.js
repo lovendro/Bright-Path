@@ -1,4 +1,4 @@
-import { currentUser, login, logout, register, createResource, createGroup, createQuestion, createAnswer, createDiscussion, toggleSavedResource, joinGroup, voteQuestion, markNotificationsRead, updateProfile, updateProfilePicture, getProfile, respondToConversationRequest, searchLearners, sendChatMessage, startConversation, listReviews, saveReview, sendGroupMessage, listGroupMessages, startCall, listRingingCalls, getCall, respondToCall, markCallMissed, sendCallSignal as publishCallSignal, listCallSignals, clearCallSignals, clearCallHistory, hideCallHistory, listConversations, listConversationMessages } from './services/index.js';
+import { currentUser, login, logout, register, createResource, createGroup, createQuestion, createAnswer, createDiscussion, toggleSavedResource, joinGroup, voteQuestion, markNotificationsRead, updateProfile, updateProfilePicture, getProfile, respondToConversationRequest, searchLearners, sendChatMessage, unsendChatMessage, startConversation, listReviews, saveReview, sendGroupMessage, unsendGroupMessage, listGroupMessages, listGroupMessageIds, startCall, listRingingCalls, getCall, respondToCall, markCallMissed, sendCallSignal as publishCallSignal, listCallSignals, clearCallSignals, clearCallHistory, hideCallHistory, listConversations, listConversationMessages, listConversationMessageIds } from './services/index.js';
 import { appShell, escapeText } from './components/Navigation.js';
 import { LandingPage } from './components/pages/LandingPage.js';
 import { SignupPage } from './components/pages/SignupPage.js';
@@ -427,9 +427,9 @@ async function refreshActiveChat() {
   if (!directThread && !groupThread) return;
 
   const append = (thread, messages, isGroup) => {
-    if (!messages.length) return;
     const shouldScroll = thread.scrollHeight - thread.scrollTop - thread.clientHeight < 48;
     thread.querySelector('.settings-hint')?.remove();
+    thread.querySelector('.chat-empty')?.remove();
     for (const message of messages) {
       if (thread.querySelector(`[data-message-id="${CSS.escape(message.id)}"]`)) continue;
       if (isGroup) {
@@ -454,6 +454,16 @@ async function refreshActiveChat() {
         const time = document.createElement('time');
         time.textContent = new Date(message.createdAt).toLocaleString();
         article.append(time);
+        if (message.senderId === user.id) {
+          const unsend = document.createElement('button');
+          unsend.className = 'message-unsend';
+          unsend.type = 'button';
+          unsend.dataset.unsendMessage = message.id;
+          unsend.dataset.messageKind = 'group';
+          unsend.setAttribute('aria-label', 'Unsend message for everyone');
+          unsend.textContent = 'Unsend';
+          article.append(unsend);
+        }
         thread.append(article);
       } else {
         const bubble = document.createElement('article');
@@ -465,18 +475,43 @@ async function refreshActiveChat() {
         time.dateTime = message.createdAt;
         time.textContent = new Date(message.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
         bubble.append(text, time);
+        if (message.senderId === user.id) {
+          const unsend = document.createElement('button');
+          unsend.className = 'message-unsend';
+          unsend.type = 'button';
+          unsend.dataset.unsendMessage = message.id;
+          unsend.dataset.messageKind = 'direct';
+          unsend.setAttribute('aria-label', 'Unsend message for everyone');
+          unsend.textContent = 'Unsend';
+          bubble.append(unsend);
+        }
         thread.append(bubble);
       }
       thread.dataset.latestAt = message.createdAt;
     }
+    const visibleIds = new Set((thread.dataset.visibleMessageIds || '').split(',').filter(Boolean));
+    for (const message of thread.querySelectorAll('[data-message-id]')) {
+      if (!visibleIds.has(message.dataset.messageId)) message.remove();
+    }
+    if (!visibleIds.size) {
+      const empty = document.createElement(isGroup ? 'p' : 'div');
+      empty.className = isGroup ? 'settings-hint' : 'chat-empty';
+      empty.textContent = isGroup ? 'No messages yet. Start the group conversation.' : 'No messages yet. Say hello and share what you are learning.';
+      thread.append(empty);
+    }
+    thread.dataset.visibleMessageIds = [...visibleIds].join(',');
     if (shouldScroll) thread.scrollTop = thread.scrollHeight;
   };
 
   if (directThread && selectedConversationId) {
-    append(directThread, await listConversationMessages(user.id, selectedConversationId, directThread.dataset.latestAt), false);
+    const messages = await listConversationMessages(user.id, selectedConversationId, directThread.dataset.latestAt);
+    directThread.dataset.visibleMessageIds = (await listConversationMessageIds(user.id, selectedConversationId)).join(',');
+    append(directThread, messages, false);
   }
   if (groupThread) {
-    append(groupThread, await listGroupMessages(groupThread.dataset.groupId, groupThread.dataset.latestAt), true);
+    const messages = await listGroupMessages(groupThread.dataset.groupId, groupThread.dataset.latestAt);
+    groupThread.dataset.visibleMessageIds = (await listGroupMessageIds(groupThread.dataset.groupId)).join(',');
+    append(groupThread, messages, true);
   }
 }
 
@@ -708,7 +743,7 @@ async function preserveSearch(input) {
 
 document.addEventListener('click', async event => {
   const select = document.querySelector('[data-signup-select]');
-  const target = event.target.closest('[data-page], [data-modal], [data-action], [data-save], [data-join], [data-vote], [data-close-modal], [data-select-trigger], [data-select-option], [data-toggle-password], [data-open-conversation], [data-start-conversation], [data-request-response], [data-review-type], [data-group-chat], [data-close-group-chat], [data-start-call], [data-call-action], [data-mobile-more], [data-hide-call], [data-clear-call-history]');
+  const target = event.target.closest('[data-page], [data-modal], [data-action], [data-save], [data-join], [data-vote], [data-close-modal], [data-select-trigger], [data-select-option], [data-toggle-password], [data-open-conversation], [data-start-conversation], [data-request-response], [data-review-type], [data-group-chat], [data-close-group-chat], [data-start-call], [data-call-action], [data-mobile-more], [data-hide-call], [data-clear-call-history], [data-unsend-message]');
   if (user && target) primeCallAudio();
   if (select?.classList.contains('is-open') && !select.contains(event.target)) {
     setSignupSelectOpen(select, false);
@@ -748,6 +783,21 @@ document.addEventListener('click', async event => {
       select.querySelector('[data-select-trigger]').focus();
     } else if (target.dataset.action === 'edit-profile') {
       await showModal('edit-profile');
+    } else if (target.hasAttribute('data-unsend-message')) {
+      if (!window.confirm('Unsend this message for everyone? It will be removed from the conversation, but someone may already have seen it.')) return;
+      target.disabled = true;
+      try {
+        if (target.dataset.messageKind === 'group') {
+          await unsendGroupMessage(user.id, selectedGroupChatId, target.dataset.unsendMessage);
+        } else {
+          await unsendChatMessage(user.id, selectedConversationId, target.dataset.unsendMessage);
+        }
+        await render(false);
+        notify('Message unsent for everyone.');
+      } catch (error) {
+        target.disabled = false;
+        throw error;
+      }
     } else if (target.hasAttribute('data-hide-call')) {
       const name = target.dataset.callName || 'this learner';
       if (!window.confirm(`Remove this call with ${name} from your history? The other participant will still see it.`)) return;

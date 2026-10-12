@@ -1,6 +1,6 @@
 import { makeId, readStore, scopedKey, writeStore } from './storage.js';
 import { isSupabaseConfigured, SUPABASE_URL } from './supabaseConfig.js';
-import { remoteInsert, remoteSelect, remoteStorageRequest } from './supabaseClient.js';
+import { remoteDelete, remoteInsert, remoteSelect, remoteStorageRequest } from './supabaseClient.js';
 const key = 'groups';
 const fromRemote = row => ({
   ...row, ownerId: row.owner_id, authorName: row.author_name, createdAt: row.created_at,
@@ -71,6 +71,14 @@ export async function listGroupMessages(groupId, after = '') {
   })));
 }
 
+export async function listGroupMessageIds(groupId) {
+  if (!isSupabaseConfigured) {
+    return readStore(scopedKey(groupId, 'group-messages'), []).map(message => message.id);
+  }
+  return (await remoteSelect('group_messages',
+    `select=id&group_id=eq.${encodeURIComponent(groupId)}`)).map(row => row.id);
+}
+
 export async function sendGroupMessage(userId, groupId, input) {
   const body = String(input.text || '').trim();
   const image = input.image;
@@ -124,4 +132,30 @@ export async function sendGroupMessage(userId, groupId, input) {
   const message = { id: makeId(), senderId: userId, senderName: input.senderName, text: body, imageUrl: '', createdAt: new Date().toISOString() };
   writeStore(messagesKey, [...readStore(messagesKey, []), message]);
   return message;
+}
+
+export async function unsendGroupMessage(userId, groupId, messageId) {
+  if (isSupabaseConfigured) {
+    const [message] = await remoteSelect('group_messages',
+      `select=id,image_path&group_id=eq.${encodeURIComponent(groupId)}&id=eq.${encodeURIComponent(messageId)}&sender_id=eq.${encodeURIComponent(userId)}`);
+    if (!message) {
+      throw new Error('This message could not be unsent. It may no longer exist or may not belong to you.');
+    }
+    if (message.image_path) {
+      await remoteStorageRequest(`object/group-chat/${encodeStoragePath(message.image_path)}`, { method: 'DELETE' });
+    }
+    const deleted = await remoteDelete('group_messages',
+      `id=eq.${encodeURIComponent(messageId)}&group_id=eq.${encodeURIComponent(groupId)}&sender_id=eq.${encodeURIComponent(userId)}`);
+    if (!deleted.length) {
+      throw new Error('The message image was removed, but the message could not be unsent.');
+    }
+    return;
+  }
+  const messagesKey = scopedKey(groupId, 'group-messages');
+  const messages = readStore(messagesKey, []);
+  const message = messages.find(item => item.id === messageId);
+  if (!message || message.senderId !== userId) {
+    throw new Error('This message could not be unsent. It may no longer exist or may not belong to you.');
+  }
+  writeStore(messagesKey, messages.filter(item => item.id !== messageId));
 }

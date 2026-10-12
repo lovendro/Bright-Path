@@ -236,6 +236,9 @@
 .group-chat-message p { margin: 5px 0; font-size: 11px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
 .group-chat-message img { display: block; max-width: min(100%, 360px); max-height: 320px; margin-top: 7px; border-radius: 8px; object-fit: contain; }
 .group-chat-message time { display: block; margin-top: 5px; color: var(--muted); font-size: 9px; }
+.message-unsend { display: block; margin: 5px 0 0 auto; padding: 2px 0; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 9px; text-decoration: underline; cursor: pointer; }
+.message-unsend:hover { color: #a23636; }
+.message-unsend:disabled { cursor: wait; opacity: .6; }
 .group-chat-panel form { border-top: 1px solid var(--line); padding-top: 12px; }
 .group-chat-panel form textarea { resize: vertical; }
 .group-chat-compose { display: flex; align-items: center; gap: 10px; margin-top: 8px; }

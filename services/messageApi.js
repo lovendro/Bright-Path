@@ -1,7 +1,7 @@
 import { makeId, readStore, scopedKey, writeStore } from './storage.js';
 import { currentUser } from './authApi.js';
 import { isSupabaseConfigured } from './supabaseConfig.js';
-import { remoteInsert, remoteRpc, remoteSelect, remoteUpdate } from './supabaseClient.js';
+import { remoteDelete, remoteInsert, remoteRpc, remoteSelect, remoteUpdate } from './supabaseClient.js';
 
 const CONVERSATIONS = 'conversations';
 const localMessagesKey = conversationId => scopedKey(conversationId, 'chat-messages');
@@ -114,6 +114,16 @@ export async function listConversationMessages(userId, conversationId, after = '
   return after ? messages.filter(message => message.createdAt > after) : messages;
 }
 
+export async function listConversationMessageIds(userId, conversationId) {
+  const conversation = (await listConversations(userId)).find(item => item.id === conversationId);
+  if (!conversation || conversation.myStatus !== 'accepted' || conversation.otherStatus !== 'accepted') return [];
+  if (isSupabaseConfigured) {
+    return (await remoteSelect('chat_messages',
+      `select=id&conversation_id=eq.${encodeURIComponent(conversationId)}`)).map(row => row.id);
+  }
+  return readStore(localMessagesKey(conversationId), []).map(message => message.id);
+}
+
 export async function sendChatMessage(userId, conversationId, text) {
   const cleaned = text.trim();
   if (!cleaned || cleaned.length > 2000) throw new Error('Messages must be between 1 and 2,000 characters.');
@@ -132,4 +142,20 @@ export async function sendChatMessage(userId, conversationId, text) {
   const message = { id: makeId(), senderId: userId, text: cleaned, createdAt: new Date().toISOString() };
   writeStore(localMessagesKey(conversationId), [...readStore(localMessagesKey(conversationId), []), message]);
   return message;
+}
+
+export async function unsendChatMessage(userId, conversationId, messageId) {
+  if (isSupabaseConfigured) {
+    const deleted = await remoteDelete('chat_messages',
+      `id=eq.${encodeURIComponent(messageId)}&conversation_id=eq.${encodeURIComponent(conversationId)}&sender_id=eq.${encodeURIComponent(userId)}`);
+    if (!deleted.length) throw new Error('This message could not be unsent. It may no longer exist or may not belong to you.');
+    return;
+  }
+  const messagesKey = localMessagesKey(conversationId);
+  const messages = readStore(messagesKey, []);
+  const message = messages.find(item => item.id === messageId);
+  if (!message || message.senderId !== userId) {
+    throw new Error('This message could not be unsent. It may no longer exist or may not belong to you.');
+  }
+  writeStore(messagesKey, messages.filter(item => item.id !== messageId));
 }
