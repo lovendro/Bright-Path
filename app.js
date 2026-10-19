@@ -1,4 +1,4 @@
-import { currentUser, login, logout, register, createResource, createGroup, createQuestion, createAnswer, createDiscussion, toggleSavedResource, joinGroup, updateGroupVisibility, getGroupMembers, addGroupMember, removeGroupMember, voteQuestion, markNotificationsRead, updateProfile, updateProfilePicture, getProfile, respondToConversationRequest, searchLearners, sendChatMessage, editChatMessage, unsendChatMessage, startConversation, listReviews, saveReview, sendGroupMessage, editGroupMessage, unsendGroupMessage, listGroupMessages, listGroupMessageIds, listGroups, startCall, listRingingCalls, getCall, respondToCall, markCallMissed, sendCallSignal as publishCallSignal, listCallSignals, clearCallSignals, clearCallHistory, hideCallHistory, listConversations, listConversationMessages, listConversationMessageIds } from './services/index.js';
+import { currentUser, login, logout, register, createResource, createGroup, createQuestion, createAnswer, createDiscussion, toggleSavedResource, joinGroup, updateGroupVisibility, getGroupMembers, addGroupMember, removeGroupMember, voteQuestion, markNotificationsRead, getUnreadNotificationCount, updateProfile, updateProfilePicture, getProfile, respondToConversationRequest, searchLearners, sendChatMessage, editChatMessage, unsendChatMessage, startConversation, listReviews, saveReview, sendGroupMessage, editGroupMessage, unsendGroupMessage, listGroupMessages, listGroupMessageIds, listGroups, startCall, listRingingCalls, getCall, respondToCall, markCallMissed, sendCallSignal as publishCallSignal, listCallSignals, clearCallSignals, clearCallHistory, hideCallHistory, listConversations, listConversationMessages, listConversationMessageIds } from './services/index.js';
 import { appShell, escapeText } from './components/Navigation.js';
 import { LandingPage } from './components/pages/LandingPage.js';
 import { SignupPage } from './components/pages/SignupPage.js';
@@ -44,6 +44,7 @@ let selectedGroupChatId = '';
 let learnerSearch = '';
 let learnerSearchResults = [];
 let toastTimer;
+let notificationBadgeTimer = null;
 let renderVersion = 0;
 let activeCall = null;
 let callMonitorTimer = null;
@@ -684,6 +685,42 @@ function loadUserTheme(userId) {
     .catch(error => notify(error.message || 'Could not load your saved theme setting.'));
 }
 
+async function refreshNotificationBadge() {
+  const userId = user?.id;
+  if (!userId) return;
+  const targets = [
+    document.querySelector('.topbar .icon-button[data-page="notifications"]'),
+    document.querySelector('.sidebar-navigation .side-link[data-page="notifications"]'),
+    document.querySelector('.mobile-island-menu-link[data-page="notifications"]')
+  ].filter(Boolean);
+  if (!targets.length) return;
+  try {
+    const count = await getUnreadNotificationCount(userId);
+    if (user?.id !== userId) return;
+    for (const target of targets) {
+      let badge = target.querySelector('[data-notification-badge]');
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'notification-badge';
+        badge.dataset.notificationBadge = '';
+        badge.setAttribute('aria-hidden', 'true');
+        target.append(badge);
+      }
+      badge.textContent = count > 99 ? '99+' : String(count);
+      badge.hidden = count === 0;
+      target.setAttribute('aria-label', count ? `Notifications, ${count} unread` : 'Notifications');
+    }
+  } catch {
+    return;
+  }
+}
+
+function monitorNotificationBadge() {
+  clearInterval(notificationBadgeTimer);
+  refreshNotificationBadge();
+  notificationBadgeTimer = setInterval(refreshNotificationBadge, 60_000);
+}
+
 async function render(animate = true) {
   const thisRender = ++renderVersion;
   const root = document.getElementById('app');
@@ -728,6 +765,7 @@ async function render(animate = true) {
               : await component(user, query);
       if (thisRender !== renderVersion) return;
       root.innerHTML = appShell(content, user, animate);
+      refreshNotificationBadge();
       if (page === 'messages') {
         const thread = root.querySelector('.messages-panel .thread-body');
         if (thread) thread.scrollTop = thread.scrollHeight;
@@ -739,6 +777,7 @@ async function render(animate = true) {
     } catch (error) {
       if (thisRender !== renderVersion) return;
       root.innerHTML = appShell(`<section class="panel"><h1>Couldn't load this page</h1><p>${escapeText(error.message || 'Check your connection and Supabase setup, then try again.')}</p><button class="btn btn-sm" data-action="retry">Try again</button></section>`, user, false);
+      refreshNotificationBadge();
     }
   } else root.innerHTML = LandingPage();
 }
@@ -1109,6 +1148,8 @@ document.addEventListener('click', async event => {
     } else if (target.dataset.action === 'logout') {
       clearInterval(callMonitorTimer);
       clearInterval(chatRefreshTimer);
+      clearInterval(notificationBadgeTimer);
+      notificationBadgeTimer = null;
       if (activeCall) await finishCall();
       logout();
       user = null;
@@ -1181,6 +1222,7 @@ document.addEventListener('submit', async event => {
       loadUserTheme(user.id);
       monitorCalls();
       monitorChats();
+      monitorNotificationBadge();
       const requestedPage = sessionStorage.getItem('bright-path:return-to') || 'home';
       sessionStorage.removeItem('bright-path:return-to');
       page = requestedPage;
@@ -1406,5 +1448,6 @@ if (user) {
   loadUserTheme(user.id);
   monitorCalls();
   monitorChats();
+  monitorNotificationBadge();
 }
 render();

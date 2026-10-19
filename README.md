@@ -40,6 +40,8 @@ In Messages, learners can remove individual calls or clear their own call histor
 
 Groups can be created as public or private. Private groups are hidden from the directory; any current member can add another learner, while only the owner can remove a member or view the roster. Chat bubbles do not show sender avatars, and message owners can edit or unsend from the adjacent three-dot menu. Run the updated `supabase/schema.sql` in the Supabase SQL Editor to enable private-group membership rules.
 
+Read notifications are removed 48 hours after being marked read; unread notifications remain. The navigation badge shows the unread count. Run the updated `supabase/schema.sql` to add notification read timestamps and cleanup permissions to an existing Supabase project.
+
 ## Kenyan imagery and motion
 
 The landing and account screens use contemporary Kenyan school photos via Wikimedia Commons: [female students at Shela Primary School, Lamu County](https://commons.wikimedia.org/wiki/File:Female_students_at_Shela_Primary_School_-_Lamu_County,_Kenya.jpg) and [a teacher training students in digital literacy](https://commons.wikimedia.org/wiki/File:Kenyan_teacher_training_students.jpg). Both are by Queen Asali and licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/); attribution appears on the site. The images load from Wikimedia and require an internet connection.

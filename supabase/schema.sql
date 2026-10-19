@@ -117,8 +117,14 @@ create table if not exists public.notifications (
   title text not null,
   message text not null default '',
   read boolean not null default false,
+  read_at timestamptz,
   created_at timestamptz not null default now()
 );
+alter table public.notifications
+  add column if not exists read_at timestamptz;
+update public.notifications
+  set read_at = created_at
+  where read and read_at is null;
 
 create table if not exists public.saved_resources (
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -259,6 +265,7 @@ create index if not exists reviews_target_created_idx on public.reviews (target_
 create index if not exists discussions_created_at_idx on public.discussions (created_at desc);
 create index if not exists messages_user_created_at_idx on public.messages (user_id, created_at);
 create index if not exists notifications_user_created_at_idx on public.notifications (user_id, created_at desc);
+create index if not exists notifications_read_expiry_idx on public.notifications (user_id, read_at) where read;
 create index if not exists conversation_members_user_idx on public.conversation_members (user_id, status);
 create index if not exists chat_messages_conversation_created_idx on public.chat_messages (conversation_id, created_at);
 create index if not exists group_messages_group_created_idx on public.group_messages (group_id, created_at);
@@ -601,6 +608,7 @@ drop policy if exists "Learners can read their own messages" on public.messages;
 drop policy if exists "Learners can send their own messages" on public.messages;
 drop policy if exists "Learners can read their own notifications" on public.notifications;
 drop policy if exists "Learners can update their own notifications" on public.notifications;
+drop policy if exists "Learners can delete their own notifications" on public.notifications;
 drop policy if exists "Learners can manage their own saved resources" on public.saved_resources;
 drop policy if exists "Conversation participants can view conversations" on public.conversations;
 drop policy if exists "Conversation participants can view membership" on public.conversation_members;
@@ -799,6 +807,9 @@ create policy "Learners can update their own notifications"
   on public.notifications for update to authenticated
   using (user_id = (select auth.uid()))
   with check (user_id = (select auth.uid()));
+create policy "Learners can delete their own notifications"
+  on public.notifications for delete to authenticated
+  using (user_id = (select auth.uid()));
 
 create policy "Learners can manage their own saved resources"
   on public.saved_resources for all to authenticated

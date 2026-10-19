@@ -485,6 +485,34 @@ select:focus-visible {
   color: var(--forest-green);
 }
 
+.notification-badge {
+  position: absolute;
+  top: -3px;
+  right: -4px;
+  display: grid;
+  min-width: 18px;
+  height: 18px;
+  place-items: center;
+  padding: 0 4px;
+  border: 2px solid var(--white);
+  border-radius: 999px;
+  background: #b4233e;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.notification-badge[hidden] {
+  display: none;
+}
+
+.sidebar-navigation .notification-badge,
+.mobile-island-menu-link .notification-badge {
+  position: static;
+  margin-left: auto;
+}
+
 .profile-mini {
   width: 38px;
   height: 38px;
