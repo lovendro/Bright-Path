@@ -676,11 +676,12 @@ function applyTheme(theme = 'system') {
 }
 
 function loadUserTheme(userId) {
+  const avatarUrlAtRequest = user?.id === userId ? user.avatarUrl : undefined;
   getProfile(userId)
     .then(profile => {
       applyTheme(profile?.theme || 'system');
       const avatarUrl = profile?.avatarUrl || '';
-      if (user?.id === userId && user.avatarUrl !== avatarUrl) {
+      if (user?.id === userId && user.avatarUrl === avatarUrlAtRequest && user.avatarUrl !== avatarUrl) {
         user = { ...user, avatarUrl };
         render(false);
       }
