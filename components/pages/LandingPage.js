@@ -75,7 +75,7 @@ export function LandingPage() {
     <footer class="footer landing-footer">
       <div class="landing-footer-brand">
         ${brand}
-        <p>People · Ideas · Brighter futures</p>
+        <p>PEOPLE • IDEAS • BRIGHTER FUTURES</p>
       </div>
       <nav class="landing-footer-links" aria-label="Footer">
         <a href="#home" data-page="home">Home</a>
