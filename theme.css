@@ -3210,6 +3210,14 @@ body,
   padding-right: 0;
 }
 
+.bubble.mine .message-actions,
+.group-chat-message.mine .message-actions {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 6px);
+  transform: translateY(-50%);
+}
+
 .group-chat-message-author {
   margin-bottom: 3px;
 }
