@@ -74,9 +74,17 @@ export async function getProfileAvatarUrls(userIds) {
   }
 
   for (let index = 0; index < missingIds.length; index += 50) {
-    const rows = await remoteRpc('get_profile_avatar_paths', {
-      target_user_ids: missingIds.slice(index, index + 50)
-    });
+    let rows;
+    try {
+      rows = await remoteRpc('get_profile_avatar_paths', {
+        target_user_ids: missingIds.slice(index, index + 50)
+      });
+    } catch (error) {
+      if (/Could not find the function .*get_profile_avatar_paths.*schema cache/i.test(error.message)) {
+        return Object.fromEntries(ids.map(userId => [userId, paths.get(userId) || '']));
+      }
+      throw error;
+    }
     const returnedPaths = new Map(rows.map(row => [row.user_id, row.avatar_path]));
     await Promise.all(missingIds.slice(index, index + 50).map(async userId => {
       const url = returnedPaths.has(userId) ? await profilePhotoUrl(returnedPaths.get(userId)) : '';

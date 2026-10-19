@@ -2121,6 +2121,89 @@ select:focus-visible {
   white-space: nowrap;
 }
 
+.group-admin-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.group-admin-controls label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.group-admin-controls .field {
+  width: auto;
+  min-width: 94px;
+  min-height: 32px;
+  padding: 5px 8px;
+  font-size: 11px;
+}
+
+.group-members-modal {
+  max-height: min(80vh, 680px);
+  overflow-y: auto;
+}
+
+.group-member-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.group-member-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--line);
+}
+
+.group-member-initial {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--sage-green);
+  color: var(--forest-green);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.group-member-copy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 3px;
+}
+
+.group-member-copy strong {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.group-member-copy small,
+.group-member-row time {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+@media (max-width: 680px) {
+  .group-admin-controls {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
 .group-avatar .ui-icon,
 .settings-card-icon .ui-icon {
   width: 20px;

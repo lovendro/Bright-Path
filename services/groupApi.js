@@ -1,15 +1,21 @@
 import { makeId, readStore, scopedKey, writeStore } from './storage.js';
+import { currentUser } from './authApi.js';
 import { isSupabaseConfigured, SUPABASE_URL } from './supabaseConfig.js';
 import { addNotification } from './notificationApi.js';
-import { remoteDelete, remoteInsert, remoteSelect, remoteStorageRequest, remoteUpdate } from './supabaseClient.js';
+import { remoteDelete, remoteInsert, remoteRpc, remoteSelect, remoteStorageRequest, remoteUpdate } from './supabaseClient.js';
 const key = 'groups';
 const fromRemote = row => ({
   ...row, ownerId: row.owner_id, authorName: row.author_name, createdAt: row.created_at,
+  isPublic: row.is_public ?? true,
   memberIds: (row.group_members || []).map(member => member.user_id)
 });
+const visibleToCurrentUser = group => {
+  const viewerId = currentUser()?.id;
+  return group.isPublic !== false || group.ownerId === viewerId || group.memberIds?.includes(viewerId);
+};
 export async function listGroups() {
   if (isSupabaseConfigured) return (await remoteSelect('study_groups', 'select=*,group_members(user_id)&order=created_at.desc')).map(fromRemote);
-  return readStore(key, []);
+  return readStore(key, []).filter(visibleToCurrentUser);
 }
 export async function listRecentGroups(limit = 3) {
   const safeLimit = Math.max(1, Math.floor(Number(limit) || 3));
@@ -17,7 +23,7 @@ export async function listRecentGroups(limit = 3) {
     return (await remoteSelect('study_groups',
       `select=*,group_members(user_id)&order=created_at.desc&limit=${safeLimit}`)).map(fromRemote);
   }
-  return readStore(key, []).slice(0, safeLimit);
+  return readStore(key, []).filter(visibleToCurrentUser).slice(0, safeLimit);
 }
 export async function listGroupsForMember(userId) {
   if (isSupabaseConfigured) {
@@ -35,18 +41,54 @@ export async function createGroup(userId, input) {
     });
     return { ...fromRemote(row), memberIds: [userId] };
   }
-  const group = { id: makeId(), ...input, ownerId: userId, memberIds: [userId], createdAt: new Date().toISOString() };
+  const group = { id: makeId(), ...input, ownerId: userId, isPublic: true, memberIds: [userId], createdAt: new Date().toISOString() };
   writeStore(key, [group, ...readStore(key, [])]);
   return group;
+}
+export async function updateGroupVisibility(userId, groupId, isPublic) {
+  if (isSupabaseConfigured) {
+    const updated = await remoteUpdate('study_groups',
+      `id=eq.${encodeURIComponent(groupId)}&owner_id=eq.${encodeURIComponent(userId)}`,
+      { is_public: Boolean(isPublic) });
+    if (!updated.length) throw new Error('Only the group owner can change its visibility.');
+    return fromRemote(updated[0]);
+  }
+  const groups = readStore(key, []);
+  const group = groups.find(item => item.id === groupId);
+  if (!group || group.ownerId !== userId) throw new Error('Only the group owner can change its visibility.');
+  group.isPublic = Boolean(isPublic);
+  writeStore(key, groups);
+  return group;
+}
+export async function getGroupMembers(userId, groupId) {
+  if (isSupabaseConfigured) {
+    return remoteRpc('get_study_group_members', { target_group_id: groupId });
+  }
+  const group = readStore(key, []).find(item => item.id === groupId);
+  if (!group || group.ownerId !== userId) throw new Error('Only the group owner can view its members.');
+  const accounts = readStore('accounts', []);
+  return group.memberIds.map(memberId => {
+    const account = accounts.find(item => item.id === memberId);
+    return {
+      user_id: memberId,
+      full_name: account?.name || 'Learner',
+      level: account?.level || 'Learner',
+      joined_at: ''
+    };
+  });
 }
 export async function joinGroup(userId, groupId) {
   if (isSupabaseConfigured) {
     await remoteInsert('group_members', { group_id: groupId, user_id: userId }, { query: 'on_conflict=group_id,user_id&select=*', ignoreDuplicates: true });
     return;
   }
-  const groups = readStore(key, []).map(group => group.id === groupId
-    ? { ...group, memberIds: group.memberIds.includes(userId) ? group.memberIds : [...group.memberIds, userId] }
-    : group);
+  const groups = readStore(key, []);
+  const group = groups.find(item => item.id === groupId);
+  if (!group) throw new Error('This study group could not be found.');
+  if (group.isPublic === false && !group.memberIds.includes(userId)) {
+    throw new Error('This group is private and cannot be joined from the directory.');
+  }
+  group.memberIds = group.memberIds.includes(userId) ? group.memberIds : [...group.memberIds, userId];
   writeStore(key, groups);
 }
 

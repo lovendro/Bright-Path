@@ -4,7 +4,7 @@
 -- This schema intentionally has no sample or seeded community content.
 
 -- -----------------------------------------------------------------------------
--- Tables
+-- Tables 
 -- -----------------------------------------------------------------------------
 
 create table if not exists public.profiles (
@@ -46,10 +46,13 @@ create table if not exists public.study_groups (
   name text not null,
   description text not null,
   subject text not null default '',
+  is_public boolean not null default true,
   owner_id uuid not null references auth.users(id) on delete cascade,
   author_name text not null default 'Learner',
   created_at timestamptz not null default now()
 );
+alter table public.study_groups
+  add column if not exists is_public boolean not null default true;
 
 create table if not exists public.group_members (
   group_id uuid not null references public.study_groups(id) on delete cascade,
@@ -307,6 +310,53 @@ drop trigger if exists on_study_group_created on public.study_groups;
 create trigger on_study_group_created
 after insert on public.study_groups
 for each row execute procedure public.add_group_owner_as_member();
+
+create or replace function public.can_view_study_group(target_group_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select auth.uid() is not null and exists (
+    select 1
+    from public.study_groups study_group
+    where study_group.id = target_group_id
+      and (
+        study_group.is_public
+        or study_group.owner_id = auth.uid()
+        or exists (
+          select 1
+          from public.group_members member
+          where member.group_id = study_group.id
+            and member.user_id = auth.uid()
+        )
+      )
+  );
+$$;
+revoke all on function public.can_view_study_group(uuid) from public;
+grant execute on function public.can_view_study_group(uuid) to authenticated;
+
+create or replace function public.get_study_group_members(target_group_id uuid)
+returns table (user_id uuid, full_name text, level text, joined_at timestamptz)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select member.user_id,
+    coalesce(nullif(profile.full_name, ''), 'Learner'),
+    coalesce(profile.level, 'Learner'),
+    member.joined_at
+  from public.study_groups study_group
+  join public.group_members member on member.group_id = study_group.id
+  left join public.profiles profile on profile.id = member.user_id
+  where study_group.id = target_group_id
+    and study_group.owner_id = auth.uid()
+  order by member.joined_at;
+$$;
+revoke all on function public.get_study_group_members(uuid) from public;
+grant execute on function public.get_study_group_members(uuid) to authenticated;
 
 create or replace function public.update_question_vote_count()
 returns trigger
@@ -630,7 +680,8 @@ create policy "Authors can delete their resources"
   using (author_id = (select auth.uid()));
 
 create policy "Authenticated learners can read study groups"
-  on public.study_groups for select to authenticated using (true);
+  on public.study_groups for select to authenticated
+  using (public.can_view_study_group(id));
 create policy "Learners can create their own groups"
   on public.study_groups for insert to authenticated
   with check (owner_id = (select auth.uid()));
@@ -643,10 +694,14 @@ create policy "Group owners can delete their groups"
   using (owner_id = (select auth.uid()));
 
 create policy "Authenticated learners can view group membership"
-  on public.group_members for select to authenticated using (true);
+  on public.group_members for select to authenticated
+  using (public.can_view_study_group(group_id));
 create policy "Learners can join as themselves"
   on public.group_members for insert to authenticated
-  with check (user_id = (select auth.uid()));
+  with check (
+    user_id = (select auth.uid())
+    and public.can_view_study_group(group_id)
+  );
 create policy "Learners can leave their own groups"
   on public.group_members for delete to authenticated
   using (user_id = (select auth.uid()));

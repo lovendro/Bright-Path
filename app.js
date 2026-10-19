@@ -1,4 +1,4 @@
-import { currentUser, login, logout, register, createResource, createGroup, createQuestion, createAnswer, createDiscussion, toggleSavedResource, joinGroup, voteQuestion, markNotificationsRead, updateProfile, updateProfilePicture, getProfile, respondToConversationRequest, searchLearners, sendChatMessage, editChatMessage, unsendChatMessage, startConversation, listReviews, saveReview, sendGroupMessage, editGroupMessage, unsendGroupMessage, listGroupMessages, listGroupMessageIds, startCall, listRingingCalls, getCall, respondToCall, markCallMissed, sendCallSignal as publishCallSignal, listCallSignals, clearCallSignals, clearCallHistory, hideCallHistory, listConversations, listConversationMessages, listConversationMessageIds } from './services/index.js';
+import { currentUser, login, logout, register, createResource, createGroup, createQuestion, createAnswer, createDiscussion, toggleSavedResource, joinGroup, updateGroupVisibility, getGroupMembers, voteQuestion, markNotificationsRead, updateProfile, updateProfilePicture, getProfile, respondToConversationRequest, searchLearners, sendChatMessage, editChatMessage, unsendChatMessage, startConversation, listReviews, saveReview, sendGroupMessage, editGroupMessage, unsendGroupMessage, listGroupMessages, listGroupMessageIds, startCall, listRingingCalls, getCall, respondToCall, markCallMissed, sendCallSignal as publishCallSignal, listCallSignals, clearCallSignals, clearCallHistory, hideCallHistory, listConversations, listConversationMessages, listConversationMessageIds } from './services/index.js';
 import { appShell, escapeText, learnerAvatar } from './components/Navigation.js';
 import { LandingPage } from './components/pages/LandingPage.js';
 import { SignupPage } from './components/pages/SignupPage.js';
@@ -816,7 +816,7 @@ async function preserveSearch(input) {
 
 document.addEventListener('click', async event => {
   const select = document.querySelector('[data-signup-select]');
-  const target = event.target.closest('a[data-page], button[data-page], [data-modal], [data-action], [data-save], [data-join], [data-vote], [data-close-modal], [data-select-trigger], [data-select-option], [data-toggle-password], [data-open-conversation], [data-start-conversation], [data-request-response], [data-review-type], [data-group-chat], [data-close-group-chat], [data-start-call], [data-call-action], [data-mobile-more], [data-hide-call], [data-clear-call-history], [data-unsend-message], [data-message-menu-trigger], [data-message-menu-action], [data-search-term], [data-public-menu], [data-group-view], [data-question-view], [data-profile-tab], [data-notification-view], [data-open-question], [data-questions-back], [data-back-messages], [data-resource-clear], [data-group-clear]');
+  const target = event.target.closest('a[data-page], button[data-page], [data-modal], [data-action], [data-save], [data-join], [data-vote], [data-close-modal], [data-select-trigger], [data-select-option], [data-toggle-password], [data-open-conversation], [data-start-conversation], [data-request-response], [data-review-type], [data-group-chat], [data-group-members], [data-close-group-chat], [data-start-call], [data-call-action], [data-mobile-more], [data-hide-call], [data-clear-call-history], [data-unsend-message], [data-message-menu-trigger], [data-message-menu-action], [data-search-term], [data-public-menu], [data-group-view], [data-question-view], [data-profile-tab], [data-notification-view], [data-open-question], [data-questions-back], [data-back-messages], [data-resource-clear], [data-group-clear]');
   if (!event.target.closest('.message-actions')) {
     document.querySelectorAll('[data-message-menu]').forEach(menu => {
       menu.hidden = true;
@@ -964,6 +964,17 @@ document.addEventListener('click', async event => {
     } else if (target.hasAttribute('data-back-messages')) {
       selectedConversationId = '';
       await render(false);
+    } else if (target.dataset.groupMembers) {
+      const members = await getGroupMembers(user.id, target.dataset.groupMembers);
+      const memberRows = members.map(member => {
+        const name = member.full_name || 'Learner';
+        const initials = name.trim().split(/\s+/).slice(0, 2).map(part => part[0] || '').join('').toUpperCase();
+        const joinedAt = member.joined_at && Number.isFinite(Date.parse(member.joined_at))
+          ? new Date(member.joined_at).toLocaleDateString()
+          : '';
+        return `<li class="group-member-row"><span class="group-member-initial">${escapeText(initials)}</span><span class="group-member-copy"><strong>${escapeText(name)}</strong><small>${escapeText(member.level || 'Learner')}</small></span>${joinedAt ? `<time>${escapeText(joinedAt)}</time>` : ''}</li>`;
+      }).join('') || '<li class="settings-hint">No members found.</li>';
+      document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="modal-backdrop"><section class="modal group-members-modal" role="dialog" aria-modal="true" aria-labelledby="group-members-title"><div class="modal-head"><h2 id="group-members-title">Members · ${escapeText(target.dataset.groupName || 'Study group')}</h2><button class="modal-close" data-close-modal aria-label="Close">×</button></div><ul class="group-member-list">${memberRows}</ul></section></div>`);
     } else if (target.hasAttribute('data-group-chat')) {
       selectedGroupChatId = target.dataset.groupChat;
       page = 'groups';
@@ -1226,7 +1237,21 @@ document.addEventListener('input', event => {
   if (event.target.id === 'page-search') preserveSearch(event.target);
 });
 
-document.addEventListener('change', event => {
+document.addEventListener('change', async event => {
+  if (event.target.matches('[data-group-visibility]')) {
+    const select = event.target;
+    select.disabled = true;
+    try {
+      const isPublic = select.value === 'public';
+      await updateGroupVisibility(user.id, select.dataset.groupVisibility, isPublic);
+      await render(false);
+      notify(`Group is now ${isPublic ? 'public' : 'private'}.`);
+    } catch (error) {
+      await render(false);
+      notify(error.message || 'Could not change group visibility.');
+    }
+    return;
+  }
   if (event.target.matches('[data-resource-filter]')) {
     resourceFilters = { ...resourceFilters, [event.target.dataset.resourceFilter]: event.target.value };
     render(false).catch(error => notify(error.message || 'Could not apply resource filters.'));
