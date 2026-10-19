@@ -4,7 +4,7 @@
 -- This schema intentionally has no sample or seeded community content.
 
 -- -----------------------------------------------------------------------------
--- Tables 
+-- Tables
 -- -----------------------------------------------------------------------------
 
 create table if not exists public.profiles (
