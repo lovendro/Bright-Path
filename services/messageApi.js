@@ -1,6 +1,7 @@
 import { makeId, readStore, scopedKey, writeStore } from './storage.js';
 import { currentUser } from './authApi.js';
 import { isSupabaseConfigured } from './supabaseConfig.js';
+import { addNotification } from './notificationApi.js';
 import { remoteDelete, remoteInsert, remoteRpc, remoteSelect, remoteUpdate } from './supabaseClient.js';
 
 const CONVERSATIONS = 'conversations';
@@ -54,6 +55,12 @@ export async function startConversation(userId, targetUserId) {
     ]
   };
   writeStore(CONVERSATIONS, [conversation, ...conversations]);
+  if (targetStatus === 'pending') {
+    await addNotification(targetUserId, {
+      title: 'New message request',
+      message: `${current?.name || 'A learner'} would like to start a conversation with you.`
+    });
+  }
   return { id: conversation.id, recipientStatus: targetStatus };
 }
 
@@ -141,6 +148,10 @@ export async function sendChatMessage(userId, conversationId, text) {
   }
   const message = { id: makeId(), senderId: userId, text: cleaned, createdAt: new Date().toISOString() };
   writeStore(localMessagesKey(conversationId), [...readStore(localMessagesKey(conversationId), []), message]);
+  await addNotification(conversation.otherUserId, {
+    title: 'New message',
+    message: `${currentUser()?.name || 'A learner'} sent you a message.`
+  });
   return message;
 }
 

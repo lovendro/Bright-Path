@@ -1,5 +1,6 @@
 import { makeId, readStore, scopedKey, writeStore } from './storage.js';
 import { isSupabaseConfigured, SUPABASE_URL } from './supabaseConfig.js';
+import { addNotification } from './notificationApi.js';
 import { remoteDelete, remoteInsert, remoteSelect, remoteStorageRequest, remoteUpdate } from './supabaseClient.js';
 const key = 'groups';
 const fromRemote = row => ({
@@ -148,6 +149,13 @@ export async function sendGroupMessage(userId, groupId, input) {
   const messagesKey = scopedKey(groupId, 'group-messages');
   const message = { id: makeId(), senderId: userId, senderName: input.senderName, text: body, imageUrl: '', createdAt: new Date().toISOString() };
   writeStore(messagesKey, [...readStore(messagesKey, []), message]);
+  const group = readStore(key, []).find(item => item.id === groupId);
+  await Promise.all((group?.memberIds || [])
+    .filter(memberId => memberId !== userId)
+    .map(memberId => addNotification(memberId, {
+      title: 'New group message',
+      message: `${input.senderName || 'A learner'} sent a message in ${group.name || 'your study group'}.`
+    })));
   return message;
 }
 
