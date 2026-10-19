@@ -3497,20 +3497,32 @@ select:focus-visible {
 
 .mobile-island {
   border-color: rgba(23, 37, 84, .14);
-  background: rgba(255, 255, 255, .97);
+  background: transparent;
+}
+
+.mobile-island-dock {
+  border-color: rgba(255, 255, 255, .14);
+  background: rgba(23, 37, 84, .97);
   box-shadow: 0 12px 32px rgba(23, 37, 84, .16);
-  color: var(--text);
+  color: #f8fafc;
 }
 
 .mobile-island-dock .mobile-island-link,
 .mobile-island-dock .mobile-island-more {
-  color: var(--muted);
+  color: #cbd5e1;
 }
 
 .mobile-island-dock .mobile-island-link.active,
 .mobile-island-dock .mobile-island-more.active {
-  background: var(--sage-wash);
-  color: var(--navy);
+  background: var(--amber);
+  color: #172554;
+}
+
+.mobile-island-dock .mobile-island-link.active .mobile-island-icon,
+.mobile-island-dock .mobile-island-more.active .mobile-island-icon,
+.mobile-island-dock .mobile-island-link.active .mobile-island-label,
+.mobile-island-dock .mobile-island-more.active .mobile-island-label {
+  color: #172554;
 }
 
 .mobile-island-menu {
@@ -3544,14 +3556,19 @@ select:focus-visible {
 
 :root[data-theme="dark"] .mobile-island {
   border-color: var(--border);
-  background: rgba(23, 32, 51, .97);
+  background: transparent;
+}
+
+:root[data-theme="dark"] .mobile-island-dock {
+  border-color: rgba(255, 255, 255, .14);
+  background: rgba(17, 27, 50, .98);
   box-shadow: 0 12px 32px rgba(0, 0, 0, .32);
 }
 
 :root[data-theme="dark"] .mobile-island-dock .mobile-island-link.active,
 :root[data-theme="dark"] .mobile-island-dock .mobile-island-more.active {
-  background: rgba(255, 255, 255, .1);
-  color: var(--amber);
+  background: var(--amber);
+  color: #172554;
 }
 
 :root[data-theme="dark"] .mobile-island-menu {
