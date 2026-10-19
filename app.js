@@ -1011,6 +1011,16 @@ document.addEventListener('click', async event => {
 
 document.addEventListener('submit', async event => {
   const form = event.target;
+  if (form.id === 'global-search-form') {
+    event.preventDefault();
+    query = String(new FormData(form).get('search') || '').trim();
+    resourceFilters = { subject: '', type: '', level: '', sort: 'newest' };
+    page = 'resources';
+    history.pushState(null, '', '#resources');
+    await render();
+    window.scrollTo(0, 0);
+    return;
+  }
   if (form.id === 'landing-resource-search') {
     event.preventDefault();
     query = String(new FormData(form).get('search') || '').trim();
@@ -1145,7 +1155,7 @@ document.addEventListener('submit', async event => {
 
 document.addEventListener('input', event => {
   if (event.target.id === 'password') updatePasswordStrength(event.target.value);
-  if (event.target.id === 'page-search' || event.target.id === 'global-search') preserveSearch(event.target);
+  if (event.target.id === 'page-search') preserveSearch(event.target);
 });
 
 document.addEventListener('change', event => {
@@ -1211,11 +1221,6 @@ document.addEventListener('keydown', event => {
     setSignupSelectOpen(select, true, true);
   }
   if (event.key === 'Escape') document.getElementById('modal-backdrop')?.remove();
-  if (event.key === 'Enter' && event.target.id === 'global-search') {
-    query = event.target.value;
-    if (page === 'home') navigate('resources');
-    else render();
-  }
 });
 
 window.addEventListener('hashchange', () => {

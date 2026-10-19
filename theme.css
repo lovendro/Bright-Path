@@ -1526,7 +1526,10 @@ select:focus-visible {
   }
 
   .topbar-right .searchbox {
-    width: 32vw;
+    display: block;
+    width: clamp(96px, 30vw, 128px);
+    min-width: 0;
+    flex: 0 1 auto;
   }
 
   .topbar-right .searchbox input {
