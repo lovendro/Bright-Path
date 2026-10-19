@@ -1459,12 +1459,18 @@ select:focus-visible {
 
   .auth-layout {
     grid-template-columns: 1fr;
+    justify-items: center;
+    padding: clamp(20px, 5vh, 48px) 16px;
   }
 
   .auth-panel {
-    min-height: 100vh;
-    max-width: 540px;
-    padding: 34px 26px;
+    width: 100%;
+    min-height: 0;
+    max-width: 500px;
+    padding: 34px clamp(24px, 7vw, 36px);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    box-shadow: var(--shadow);
   }
 
   .auth-panel .brand {
