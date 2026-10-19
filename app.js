@@ -692,8 +692,21 @@ async function render(animate = true) {
     return;
   }
   if (protectedPages.has(page) && !user) page = 'login';
-  if (page === 'signup') root.innerHTML = SignupPage();
-  else if (page === 'login') root.innerHTML = LoginPage();
+  if (page === 'signup') {
+    root.innerHTML = SignupPage();
+    const roleOptions = root.querySelector('#level-options');
+    for (const role of ['Teacher', 'Lecturer', 'Tutor']) {
+      const option = document.createElement('button');
+      option.className = 'signup-select-option';
+      option.type = 'button';
+      option.setAttribute('role', 'option');
+      option.setAttribute('aria-selected', 'false');
+      option.tabIndex = -1;
+      option.dataset.selectOption = role;
+      option.textContent = role;
+      roleOptions?.append(option);
+    }
+  } else if (page === 'login') root.innerHTML = LoginPage();
   else if (protectedPages.has(page) && user) {
     const component = components[page];
     if (animate && ['resources', 'groups', 'qa', 'messages', 'profile'].includes(page)) {
