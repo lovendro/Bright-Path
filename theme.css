@@ -2391,12 +2391,9 @@ body,
   color: var(--navy);
 }
 
-.brand-leaf {
-  fill: #34d399;
-  stroke: var(--navy);
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: .8;
+.brand-sun {
+  fill: var(--amber);
+  stroke: var(--amber);
 }
 
 .landing-links a:hover,
@@ -2516,9 +2513,9 @@ body,
   color: #fff;
 }
 
-.landing-footer .brand-leaf {
-  fill: #34d399;
-  stroke: var(--navy);
+.landing-footer .brand-sun {
+  fill: var(--amber);
+  stroke: var(--amber);
 }
 
 .landing-footer-links a:hover {
