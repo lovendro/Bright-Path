@@ -1,12 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
-  <defs>
-    <clipPath id="sunrise">
-      <rect x="17" y="10" width="14" height="10"/>
-    </clipPath>
-  </defs>
   <rect width="48" height="48" rx="12" fill="#172554"/>
-  <path d="M24 8.5v2.5M19 11l1.7 1.7M29 11l-1.7 1.7M16.8 16h3M28.2 16h3" fill="none" stroke="#f4af20" stroke-linecap="round" stroke-width="1.8"/>
-  <circle cx="24" cy="20" r="5" fill="#f4af20" clip-path="url(#sunrise)"/>
+  <path d="M24 20c-12-2-12-12-12-12 10 0 15 4 12 12Zm0 0c-1-9 4-14 11-15 1 8-3 14-11 15Z" fill="#34d399" stroke="#faf7f0" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/>
+  <path d="M24 20c-1-5-4-8-8-10m8 10c1-5 4-8 8-10" fill="none" stroke="#172554" stroke-linecap="round" stroke-width="1.2"/>
   <path d="M5 18c7-3 13-2 19 2 6-4 12-5 19-2v18c-7-3-13-2-19 2-6-4-12-5-19-2V18Z" fill="#172554" stroke="#faf7f0" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"/>
   <path d="M24 20v18M10 23c4-1 7 0 10 2m18-2c-4-1-7 0-10 2" fill="none" stroke="#faf7f0" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"/>
 </svg>
