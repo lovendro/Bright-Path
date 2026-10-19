@@ -1,6 +1,6 @@
 import { icon } from './Icons.js';
 
-export const brand = `<a class="brand" href="#home" data-page="home" aria-label="Bright Path home"><span class="brand-mark"><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M7 27h18M10 26c0-6 2-9 6-12s6-5 6-9M12 21l-5-2m10-4-5-2" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><circle class="brand-sun" cx="23" cy="6" r="2.5"/></svg></span><span>Bright Path</span></a>`;
+export const brand = `<a class="brand" href="#home" data-page="home" aria-label="Bright Path home"><span class="brand-mark"><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><circle class="brand-sun" cx="16" cy="6.5" r="2.8"/><path d="M3 13c5-2 9-1 13 2 4-3 8-4 13-2v12c-5-2-9-1-13 2-4-3-8-4-13-2V13Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 15v12M7 17c3-.5 5 0 7 1.5m11-1.5c-3-.5-5 0-7 1.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Bright Path</span></a>`;
 
 const links = [['Home', 'home'], ['Resources', 'resources'], ['Study Groups', 'groups'], ['Q&A', 'qa'], ['Community', 'community']];
 const sideLinks = [['home', 'Home', 'home'], ['resources', 'Resources', 'resources'], ['groups', 'Study Groups', 'groups'], ['questions', 'Questions & Answers', 'qa'], ['community', 'Community', 'community'], ['ai', 'AI Learning Hub', 'ai'], ['messages', 'Messages', 'messages'], ['notifications', 'Notifications', 'notifications']];
