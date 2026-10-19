@@ -2393,10 +2393,10 @@ body,
 
 .brand-leaf {
   fill: #34d399;
-  stroke: #faf7f0;
+  stroke: var(--navy);
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 1.1;
+  stroke-width: .8;
 }
 
 .landing-links a:hover,
@@ -2518,7 +2518,7 @@ body,
 
 .landing-footer .brand-leaf {
   fill: #34d399;
-  stroke: #faf7f0;
+  stroke: var(--navy);
 }
 
 .landing-footer-links a:hover {
