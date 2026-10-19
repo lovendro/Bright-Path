@@ -1,5 +1,5 @@
 import { currentUser, login, logout, register, createResource, createGroup, createQuestion, createAnswer, createDiscussion, toggleSavedResource, joinGroup, voteQuestion, markNotificationsRead, updateProfile, updateProfilePicture, getProfile, respondToConversationRequest, searchLearners, sendChatMessage, editChatMessage, unsendChatMessage, startConversation, listReviews, saveReview, sendGroupMessage, editGroupMessage, unsendGroupMessage, listGroupMessages, listGroupMessageIds, startCall, listRingingCalls, getCall, respondToCall, markCallMissed, sendCallSignal as publishCallSignal, listCallSignals, clearCallSignals, clearCallHistory, hideCallHistory, listConversations, listConversationMessages, listConversationMessageIds } from './services/index.js';
-import { appShell, escapeText } from './components/Navigation.js';
+import { appShell, escapeText, learnerAvatar } from './components/Navigation.js';
 import { LandingPage } from './components/pages/LandingPage.js';
 import { SignupPage } from './components/pages/SignupPage.js';
 import { LoginPage } from './components/pages/LoginPage.js';
@@ -14,6 +14,7 @@ import { NotificationsPage } from './components/pages/NotificationsPage.js';
 import { ProfilePage } from './components/pages/ProfilePage.js';
 import { SettingsPage } from './components/pages/SettingsPage.js';
 import { isSupabaseConfigured } from './services/supabaseConfig.js';
+import { getProfileAvatarUrls } from './services/profileApi.js';
 
 const protectedPages = new Set(['home', 'resources', 'groups', 'qa', 'community', 'ai', 'messages', 'notifications', 'profile', 'settings']);
 const components = {
@@ -460,7 +461,7 @@ async function refreshActiveChat() {
     article.append(actions);
   };
 
-  const append = (thread, messages, isGroup) => {
+  const append = (thread, messages, isGroup, avatarUrls = {}) => {
     const shouldScroll = thread.scrollHeight - thread.scrollTop - thread.clientHeight < 48;
     thread.querySelector('.settings-hint')?.remove();
     thread.querySelector('.chat-empty')?.remove();
@@ -483,9 +484,17 @@ async function refreshActiveChat() {
         const article = document.createElement('article');
         article.className = `group-chat-message ${message.senderId === user.id ? 'mine' : ''}`;
         article.dataset.messageId = message.id;
+        const author = document.createElement('div');
+        author.className = 'group-chat-message-author';
+        author.insertAdjacentHTML('beforeend', learnerAvatar(
+          message.senderName || 'Learner',
+          message.senderId === user.id ? user.avatarUrl : avatarUrls[message.senderId] || '',
+          'group-chat-avatar'
+        ));
         const name = document.createElement('strong');
         name.textContent = message.senderName || 'Learner';
-        article.append(name);
+        author.append(name);
+        article.append(author);
         if (message.text) {
           const text = document.createElement('p');
           text.textContent = message.text;
@@ -507,6 +516,11 @@ async function refreshActiveChat() {
         const bubble = document.createElement('article');
         bubble.className = `bubble ${message.senderId === user.id ? 'mine' : ''}`;
         bubble.dataset.messageId = message.id;
+        bubble.insertAdjacentHTML('beforeend', learnerAvatar(
+          message.senderId === user.id ? user.name : 'Learner',
+          message.senderId === user.id ? user.avatarUrl : avatarUrls[message.senderId] || '',
+          'bubble-sender-avatar'
+        ));
         const text = document.createElement('p');
         text.textContent = message.text;
         const time = document.createElement('time');
@@ -534,13 +548,15 @@ async function refreshActiveChat() {
 
   if (directThread && selectedConversationId) {
     const messages = await listConversationMessages(user.id, selectedConversationId, directThread.dataset.latestAt);
+    const avatarUrls = await getProfileAvatarUrls([...new Set(messages.map(message => message.senderId))]);
     directThread.dataset.visibleMessageIds = (await listConversationMessageIds(user.id, selectedConversationId)).join(',');
-    append(directThread, messages, false);
+    append(directThread, messages, false, avatarUrls);
   }
   if (groupThread) {
     const messages = await listGroupMessages(groupThread.dataset.groupId, groupThread.dataset.latestAt);
+    const avatarUrls = await getProfileAvatarUrls([...new Set(messages.map(message => message.senderId))]);
     groupThread.dataset.visibleMessageIds = (await listGroupMessageIds(groupThread.dataset.groupId)).join(',');
-    append(groupThread, messages, true);
+    append(groupThread, messages, true, avatarUrls);
   }
 }
 
@@ -661,7 +677,14 @@ function applyTheme(theme = 'system') {
 
 function loadUserTheme(userId) {
   getProfile(userId)
-    .then(profile => applyTheme(profile?.theme || 'system'))
+    .then(profile => {
+      applyTheme(profile?.theme || 'system');
+      const avatarUrl = profile?.avatarUrl || '';
+      if (user?.id === userId && user.avatarUrl !== avatarUrl) {
+        user = { ...user, avatarUrl };
+        render(false);
+      }
+    })
     .catch(error => notify(error.message || 'Could not load your saved theme setting.'));
 }
 
@@ -710,6 +733,10 @@ async function render(animate = true) {
     }
   } else root.innerHTML = LandingPage();
 }
+
+document.addEventListener('error', event => {
+  if (event.target.matches?.('[data-avatar-image]')) event.target.remove();
+}, true);
 
 function navigate(nextPage) {
   const allowed = ['home', 'signup', 'login', 'confirm', ...protectedPages];
@@ -1167,7 +1194,10 @@ document.addEventListener('submit', async event => {
     try {
       await updateProfile(user.id, { bio: data.get('bio'), interests: data.get('interests'), level: user.level });
       const photo = data.get('photo');
-      if (photo instanceof File && photo.size > 0) await updateProfilePicture(user.id, photo);
+      if (photo instanceof File && photo.size > 0) {
+        const updatedProfile = await updateProfilePicture(user.id, photo);
+        user = { ...user, avatarUrl: updatedProfile.avatarUrl };
+      }
       document.getElementById('modal-backdrop')?.remove();
       await render(false);
       notify('Profile updated.');

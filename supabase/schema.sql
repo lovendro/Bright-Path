@@ -4,7 +4,7 @@
 -- This schema intentionally has no sample or seeded community content.
 
 -- -----------------------------------------------------------------------------
--- Tables
+-- Tables 
 -- -----------------------------------------------------------------------------
 
 create table if not exists public.profiles (
@@ -575,6 +575,42 @@ as $$
   );
 $$;
 grant execute on function public.is_conversation_member(uuid) to authenticated;
+
+create or replace function public.get_profile_avatar_paths(target_user_ids uuid[])
+returns table (user_id uuid, avatar_path text)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select profile.id, profile.avatar_path
+  from public.profiles profile
+  where auth.uid() is not null
+    and profile.id = any(coalesce(target_user_ids, array[]::uuid[]))
+    and profile.avatar_path is not null
+    and (
+      profile.id = auth.uid()
+      or profile.is_public
+      or exists (
+        select 1
+        from public.conversation_members viewer_member
+        join public.conversation_members target_member
+          on target_member.conversation_id = viewer_member.conversation_id
+        where viewer_member.user_id = auth.uid()
+          and target_member.user_id = profile.id
+      )
+      or exists (
+        select 1
+        from public.group_members viewer_member
+        join public.group_members target_member
+          on target_member.group_id = viewer_member.group_id
+        where viewer_member.user_id = auth.uid()
+          and target_member.user_id = profile.id
+      )
+    );
+$$;
+revoke all on function public.get_profile_avatar_paths(uuid[]) from public;
+grant execute on function public.get_profile_avatar_paths(uuid[]) to authenticated;
 
 create policy "Profiles are readable by their owner"
   on public.profiles for select to authenticated

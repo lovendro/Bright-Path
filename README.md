@@ -32,6 +32,8 @@ When Supabase is configured, account creation/sign-in and resources, groups, que
 
 Senders can edit or unsend their direct and study-group messages for everyone using the message options menu; group-chat images attached to an unsent message are removed as well. Recipients may already have seen or saved content before it was changed or unsent.
 
+Profile pictures appear in the navigation avatar and in messaging views for your conversations and study groups. Apply the current `supabase/schema.sql` to enable secure loading of other learners' profile pictures.
+
 Before a public launch, configure a TURN relay, add moderation/reporting, privacy and retention controls, backups, abuse prevention, and testing for the project's safeguarding requirements. Do not store sensitive student data until those protections are ready.
 
 In Messages, learners can remove individual calls or clear their own call history; these actions do not remove the other participant's records. Run the updated `supabase/schema.sql` to enable call-history management in an existing Supabase project.

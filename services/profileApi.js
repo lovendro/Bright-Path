@@ -1,7 +1,7 @@
 import { currentUser } from './authApi.js';
 import { readStore, scopedKey, writeStore } from './storage.js';
 import { isSupabaseConfigured, SUPABASE_URL } from './supabaseConfig.js';
-import { remoteStorageRequest, remoteSelect, remoteUpdate } from './supabaseClient.js';
+import { remoteStorageRequest, remoteSelect, remoteRpc, remoteUpdate } from './supabaseClient.js';
 
 const PROFILE_PHOTO_BUCKET = 'profile-photos';
 const MAX_PROFILE_PHOTO_SIZE = 5 * 1024 * 1024;
@@ -11,6 +11,16 @@ const PROFILE_PHOTO_TYPES = new Map([
   ['image/webp', 'webp']
 ]);
 const encodeStoragePath = path => path.split('/').map(encodeURIComponent).join('/');
+const AVATAR_URL_CACHE_MS = 50 * 60 * 1000;
+const avatarUrlCache = new Map();
+const cachedAvatarUrl = userId => {
+  const cached = avatarUrlCache.get(userId);
+  if (!cached || cached.expiresAt <= Date.now()) {
+    avatarUrlCache.delete(userId);
+    return undefined;
+  }
+  return cached.url;
+};
 
 async function profilePhotoUrl(path) {
   const result = await remoteStorageRequest(
@@ -43,6 +53,41 @@ export async function getProfile(userId) {
   }
   return { ...user, isPublic: false, theme: 'system', ...readStore(scopedKey(userId, 'profile'), {}) };
 }
+
+export async function getProfileAvatarUrls(userIds) {
+  const ids = [...new Set(userIds.filter(Boolean))];
+  if (!ids.length) return {};
+
+  if (!isSupabaseConfigured) {
+    return Object.fromEntries(ids.map(userId => [
+      userId,
+      readStore(scopedKey(userId, 'profile'), {}).avatarUrl || ''
+    ]));
+  }
+
+  const paths = new Map();
+  const missingIds = [];
+  for (const userId of ids) {
+    const url = cachedAvatarUrl(userId);
+    if (url !== undefined) paths.set(userId, url);
+    else missingIds.push(userId);
+  }
+
+  for (let index = 0; index < missingIds.length; index += 50) {
+    const rows = await remoteRpc('get_profile_avatar_paths', {
+      target_user_ids: missingIds.slice(index, index + 50)
+    });
+    const returnedPaths = new Map(rows.map(row => [row.user_id, row.avatar_path]));
+    await Promise.all(missingIds.slice(index, index + 50).map(async userId => {
+      const url = returnedPaths.has(userId) ? await profilePhotoUrl(returnedPaths.get(userId)) : '';
+      avatarUrlCache.set(userId, { url, expiresAt: Date.now() + AVATAR_URL_CACHE_MS });
+      paths.set(userId, url);
+    }));
+  }
+
+  return Object.fromEntries(ids.map(userId => [userId, paths.get(userId) || '']));
+}
+
 export async function updateProfile(userId, changes) {
   const allowed = {};
   if ('bio' in changes) allowed.bio = String(changes.bio || '');
@@ -104,5 +149,7 @@ export async function updateProfilePicture(userId, file) {
       throw new Error(`Your profile picture was saved, but the previous picture could not be removed: ${error.message}`);
     }
   }
-  return { ...updated, avatarUrl: await profilePhotoUrl(path) };
+  const avatarUrl = await profilePhotoUrl(path);
+  avatarUrlCache.set(userId, { url: avatarUrl, expiresAt: Date.now() + AVATAR_URL_CACHE_MS });
+  return { ...updated, avatarUrl };
 }
