@@ -5,7 +5,7 @@ const tabs = [['recent', 'Recent'], ['unanswered', 'Unanswered'], ['trending', '
 
 function questionCard(question) {
   const answerCount = Number(question.answerCount || 0);
-  return `<article class="question-card question-card-compact">
+  return `<article class="question-card question-card-compact accent-amber">
     <div class="question-card-stats"><span><strong>${answerCount}</strong> ${answerCount === 1 ? 'answer' : 'answers'}</span></div>
     <div class="question-card-content">
       <h3><button class="question-open" type="button" data-open-question="${escapeText(question.id)}">${escapeText(question.title)}</button></h3>
@@ -29,7 +29,7 @@ export async function QuestionsPage(user, query = '', view = 'recent', selectedQ
       : '<p class="settings-hint">No answers yet. Share a helpful response.</p>';
     return `<div class="question-detail-page">
       <button type="button" class="btn btn-light btn-sm question-back" data-questions-back>← Back to Questions</button>
-      <article class="panel question-detail">
+      <article class="panel question-detail accent-amber">
         <div class="question-detail-meta">${selectedQuestion.subject ? `<span class="tag">${escapeText(selectedQuestion.subject)}</span>` : ''}<span>Asked by ${escapeText(selectedQuestion.authorName || 'a learner')}</span><time datetime="${escapeText(selectedQuestion.createdAt)}">${escapeText(new Date(selectedQuestion.createdAt).toLocaleDateString())}</time></div>
         <h1>${escapeText(selectedQuestion.title)}</h1>
         <p class="question-detail-description">${escapeText(selectedQuestion.description || '')}</p>

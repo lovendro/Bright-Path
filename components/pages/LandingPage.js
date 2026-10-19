@@ -1,10 +1,11 @@
 import { brand, publicHeader } from '../Navigation.js';
+import { icon } from '../Icons.js';
 
 const features = [
-  ['▣', 'Access Resources', 'Discover notes, books, past papers, articles and useful learning materials.', 'Browse Resources', 'resources'],
-  ['♧', 'Join Study Groups', 'Learn together, exchange ideas and stay motivated with other students.', 'Find a Group', 'groups'],
-  ['?', 'Ask & Solve', 'Post difficult questions and get help from learners who understand the topic.', 'Ask a Question', 'qa'],
-  ['✦', 'Learn AI Wisely', 'Use AI as a learning tool without replacing your own critical thinking.', 'Explore AI Guides', 'ai']
+  ['resources', 'blue', 'Access Resources', 'Discover notes, books, past papers, articles and useful learning materials.', 'Browse Resources', 'resources'],
+  ['groups', 'teal', 'Join Study Groups', 'Learn together, exchange ideas and stay motivated with other students.', 'Find a Group', 'groups'],
+  ['questions', 'amber', 'Ask & Solve', 'Post difficult questions and get help from learners who understand the topic.', 'Ask a Question', 'qa'],
+  ['ai', 'violet', 'Learn AI Wisely', 'Use AI as a learning tool without replacing your own critical thinking.', 'Explore AI Guides', 'ai']
 ];
 
 export function LandingPage() {
@@ -34,8 +35,8 @@ export function LandingPage() {
           <p>Whatever you’re learning, you don’t have to do it alone.</p>
         </div>
         <div class="landing-feature-grid">
-          ${features.map(([icon, title, description, action, page]) => `<article class="landing-feature-card">
-            <div class="feature-icon" aria-hidden="true">${icon}</div>
+          ${features.map(([iconName, accent, title, description, action, page]) => `<article class="landing-feature-card accent-${accent}">
+            <div class="feature-icon" aria-hidden="true">${icon(iconName, 22)}</div>
             <h3>${title}</h3>
             <p>${description}</p>
             <a href="#${page}" data-page="${page}">${action} <span aria-hidden="true">→</span></a>
