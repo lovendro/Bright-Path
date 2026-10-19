@@ -36,6 +36,9 @@ let resourceFilters = { subject: '', type: '', level: '', sort: 'newest' };
 let groupView = 'all';
 let groupSubject = '';
 let questionView = 'recent';
+let selectedQuestionId = '';
+let profileTab = 'about';
+let notificationView = 'all';
 let selectedConversationId = '';
 let selectedGroupChatId = '';
 let learnerSearch = '';
@@ -674,6 +677,9 @@ async function render(animate = true) {
   else if (page === 'login') root.innerHTML = LoginPage();
   else if (protectedPages.has(page) && user) {
     const component = components[page];
+    if (animate && ['resources', 'groups', 'qa', 'messages', 'profile'].includes(page)) {
+      root.innerHTML = appShell(`<section class="panel loading-state" role="status" aria-live="polite"><span class="loading-indicator" aria-hidden="true"></span><strong>Loading ${escapeText(page === 'qa' ? 'questions' : page)}…</strong></section>`, user, false);
+    }
     try {
       const content = page === 'messages'
         ? await component(user, selectedConversationId, learnerSearchResults, learnerSearch)
@@ -682,12 +688,20 @@ async function render(animate = true) {
           : page === 'resources'
             ? await component(user, query, resourceFilters)
             : page === 'qa'
-              ? await component(user, query, questionView)
+              ? await component(user, query, questionView, selectedQuestionId)
+              : page === 'profile'
+                ? await component(user, profileTab)
+                : page === 'notifications'
+                  ? await component(user, notificationView)
               : await component(user, query);
       if (thisRender !== renderVersion) return;
       root.innerHTML = appShell(content, user, animate);
       if (page === 'messages') {
         const thread = root.querySelector('.messages-panel .thread-body');
+        if (thread) thread.scrollTop = thread.scrollHeight;
+      }
+      if (page === 'groups' && selectedGroupChatId) {
+        const thread = root.querySelector('.group-chat-thread');
         if (thread) thread.scrollTop = thread.scrollHeight;
       }
     } catch (error) {
@@ -705,6 +719,7 @@ function navigate(nextPage) {
     page = 'signup';
   }
   query = '';
+  selectedQuestionId = '';
   history.pushState(null, '', `#${page}`);
   render();
   window.scrollTo(0, 0);
@@ -773,7 +788,7 @@ async function preserveSearch(input) {
 
 document.addEventListener('click', async event => {
   const select = document.querySelector('[data-signup-select]');
-  const target = event.target.closest('[data-page], [data-modal], [data-action], [data-save], [data-join], [data-vote], [data-close-modal], [data-select-trigger], [data-select-option], [data-toggle-password], [data-open-conversation], [data-start-conversation], [data-request-response], [data-review-type], [data-group-chat], [data-close-group-chat], [data-start-call], [data-call-action], [data-mobile-more], [data-hide-call], [data-clear-call-history], [data-unsend-message], [data-message-menu-trigger], [data-message-menu-action], [data-search-term], [data-public-menu], [data-group-view], [data-question-view], [data-resource-clear], [data-group-clear]');
+  const target = event.target.closest('[data-page], [data-modal], [data-action], [data-save], [data-join], [data-vote], [data-close-modal], [data-select-trigger], [data-select-option], [data-toggle-password], [data-open-conversation], [data-start-conversation], [data-request-response], [data-review-type], [data-group-chat], [data-close-group-chat], [data-start-call], [data-call-action], [data-mobile-more], [data-hide-call], [data-clear-call-history], [data-unsend-message], [data-message-menu-trigger], [data-message-menu-action], [data-search-term], [data-public-menu], [data-group-view], [data-question-view], [data-profile-tab], [data-notification-view], [data-open-question], [data-questions-back], [data-back-messages], [data-resource-clear], [data-group-clear]');
   if (!event.target.closest('.message-actions')) {
     document.querySelectorAll('[data-message-menu]').forEach(menu => {
       menu.hidden = true;
@@ -918,6 +933,9 @@ document.addEventListener('click', async event => {
       else startRingbackTone();
       updateCallControl(target, activeCall.isRingbackMuted ? 'speakerOff' : 'speaker',
         activeCall.isRingbackMuted ? 'Sound on' : 'Sound off', activeCall.isRingbackMuted);
+    } else if (target.hasAttribute('data-back-messages')) {
+      selectedConversationId = '';
+      await render(false);
     } else if (target.hasAttribute('data-group-chat')) {
       selectedGroupChatId = target.dataset.groupChat;
       page = 'groups';
@@ -950,8 +968,27 @@ document.addEventListener('click', async event => {
     } else if (target.dataset.groupView) {
       groupView = target.dataset.groupView;
       await render(false);
+      document.querySelector('[role="tab"][aria-selected="true"]')?.focus();
     } else if (target.dataset.questionView) {
       questionView = target.dataset.questionView;
+      selectedQuestionId = '';
+      await render(false);
+      document.querySelector('[role="tab"][aria-selected="true"]')?.focus();
+    } else if (target.dataset.profileTab) {
+      profileTab = target.dataset.profileTab;
+      await render(false);
+      document.querySelector('[role="tab"][aria-selected="true"]')?.focus();
+    } else if (target.dataset.notificationView) {
+      notificationView = target.dataset.notificationView;
+      await render(false);
+      document.querySelector('[role="tab"][aria-selected="true"]')?.focus();
+    } else if (target.dataset.openQuestion) {
+      selectedQuestionId = target.dataset.openQuestion;
+      page = 'qa';
+      history.replaceState(null, '', '#qa');
+      await render(false);
+    } else if (target.hasAttribute('data-questions-back')) {
+      selectedQuestionId = '';
       await render(false);
     } else if (target.hasAttribute('data-resource-clear')) {
       query = '';
@@ -1199,6 +1236,20 @@ document.addEventListener('change', event => {
 });
 
 document.addEventListener('keydown', event => {
+  const tab = event.target.closest('[role="tab"]');
+  if (tab && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+    const tabs = [...tab.closest('[role="tablist"]').querySelectorAll('[role="tab"]')];
+    const currentIndex = tabs.indexOf(tab);
+    const nextIndex = event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? tabs.length - 1
+        : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+    event.preventDefault();
+    tabs[nextIndex].focus();
+    tabs[nextIndex].click();
+    return;
+  }
   const select = document.querySelector('[data-signup-select]');
   if (select?.classList.contains('is-open')) {
     const options = [...select.querySelectorAll('[data-select-option]')];

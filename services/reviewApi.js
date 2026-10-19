@@ -13,6 +13,18 @@ export async function listReviews(targetType, targetId) {
   return readStore(REVIEWS, []).filter(review => review.targetType === targetType && review.targetId === targetId);
 }
 
+export async function listReviewsForGroups(groupIds) {
+  if (!groupIds.length) return [];
+  if (isSupabaseConfigured) {
+    const targets = groupIds.map(encodeURIComponent).join(',');
+    return remoteSelect('reviews',
+      `select=*&target_type=eq.group&target_id=in.${encodeURIComponent(`(${targets})`)}&order=created_at.desc`);
+  }
+  return readStore(REVIEWS, []).filter(review =>
+    review.targetType === 'group' && groupIds.includes(review.targetId)
+  );
+}
+
 export async function saveReview(userId, input) {
   const { targetType, targetId } = input;
   const rating = Number(input.rating);

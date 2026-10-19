@@ -7,9 +7,16 @@ export async function listQuestions() {
   if (isSupabaseConfigured) return (await remoteSelect('questions', 'select=*&order=created_at.desc')).map(fromRemote);
   return readStore(key, []);
 }
+export async function listRecentQuestions(limit = 3) {
+  const safeLimit = Math.max(1, Math.floor(Number(limit) || 3));
+  if (isSupabaseConfigured) {
+    return (await remoteSelect('questions', `select=*&order=created_at.desc&limit=${safeLimit}`)).map(fromRemote);
+  }
+  return readStore(key, []).slice(0, safeLimit);
+}
 export async function listQuestionsByAuthor(userId) {
   if (isSupabaseConfigured) {
-    return (await remoteSelect('questions', `select=id&author_id=eq.${encodeURIComponent(userId)}`)).map(fromRemote);
+    return (await remoteSelect('questions', `select=*&author_id=eq.${encodeURIComponent(userId)}&order=created_at.desc`)).map(fromRemote);
   }
   return readStore(key, []).filter(question => question.authorId === userId);
 }

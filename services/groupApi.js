@@ -10,12 +10,21 @@ export async function listGroups() {
   if (isSupabaseConfigured) return (await remoteSelect('study_groups', 'select=*,group_members(user_id)&order=created_at.desc')).map(fromRemote);
   return readStore(key, []);
 }
+export async function listRecentGroups(limit = 3) {
+  const safeLimit = Math.max(1, Math.floor(Number(limit) || 3));
+  if (isSupabaseConfigured) {
+    return (await remoteSelect('study_groups',
+      `select=*,group_members(user_id)&order=created_at.desc&limit=${safeLimit}`)).map(fromRemote);
+  }
+  return readStore(key, []).slice(0, safeLimit);
+}
 export async function listGroupsForMember(userId) {
   if (isSupabaseConfigured) {
-    const groups = await remoteSelect('study_groups', `select=id,group_members!inner(user_id)&group_members.user_id=eq.${encodeURIComponent(userId)}`);
-    return groups.map(group => group.id);
+    const groups = await remoteSelect('study_groups',
+      'select=*,group_members(user_id)&order=created_at.desc');
+    return groups.map(fromRemote).filter(group => group.memberIds.includes(userId));
   }
-  return readStore(key, []).filter(group => group.memberIds?.includes(userId)).map(group => group.id);
+  return readStore(key, []).filter(group => group.memberIds?.includes(userId));
 }
 export async function createGroup(userId, input) {
   if (isSupabaseConfigured) {
