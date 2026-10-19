@@ -960,8 +960,15 @@ document.addEventListener('click', async event => {
       render();
       notify('You have logged out.');
     } else if (target.dataset.action === 'mark-read') {
-      await markNotificationsRead(user.id);
-      await render(false);
+      target.disabled = true;
+      try {
+        await markNotificationsRead(user.id);
+        await render(false);
+        notify('All notifications marked as read.');
+      } catch (error) {
+        target.disabled = false;
+        throw error;
+      }
     } else if (target.dataset.action === 'retry') await render();
   } catch (error) {
     notify(error.message || 'The request failed. Check your connection and try again.');
