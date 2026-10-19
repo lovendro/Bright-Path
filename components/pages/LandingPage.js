@@ -1,4 +1,11 @@
-import { publicHeader } from '../Navigation.js';
+import { brand, publicHeader } from '../Navigation.js';
+
+const features = [
+  ['▣', 'Access Resources', 'Discover notes, books, past papers, articles and useful learning materials.', 'Browse Resources', 'resources'],
+  ['♧', 'Join Study Groups', 'Learn together, exchange ideas and stay motivated with other students.', 'Find a Group', 'groups'],
+  ['?', 'Ask & Solve', 'Post difficult questions and get help from learners who understand the topic.', 'Ask a Question', 'qa'],
+  ['✦', 'Learn AI Wisely', 'Use AI as a learning tool without replacing your own critical thinking.', 'Explore AI Guides', 'ai']
+];
 
 export function LandingPage() {
   return `<div class="landing-page">
@@ -6,59 +13,76 @@ export function LandingPage() {
     <main>
       <section class="hero landing-hero">
         <div class="hero-copy">
-          <span class="eyebrow">A learning community from Kenya</span>
-          <h1>Bring a question.<br><span>Find your people.</span></h1>
-          <p>Bright Path is a place for learners to share revision materials, find study partners, and ask for help—from secondary school to campus and beyond.</p>
+          <span class="eyebrow">Knowledge · Community · A brighter tomorrow</span>
+          <h1>Learn.<br>Share.<br><span>Grow together.</span></h1>
+          <p>Bright Path is a nonprofit learning community where students and learners find shared resources, solve problems together, and learn to use AI responsibly.</p>
           <div class="hero-buttons">
-            <a class="btn" href="#signup" data-page="signup">Join the community <span>→</span></a>
-            <a class="btn btn-light" href="#login" data-page="login">Log in</a>
+            <a class="btn" href="#signup" data-page="signup">Get started <span aria-hidden="true">→</span></a>
+            <a class="btn btn-light" href="#resources" data-page="resources">Explore resources</a>
           </div>
-          <div class="social-proof"><span>Start with one question, one useful note, or a study group.</span></div>
+          <a class="landing-secondary-link" href="#groups" data-page="groups">Or find a study group <span aria-hidden="true">↗</span></a>
         </div>
         <div class="hero-image" role="img" aria-label="Students at Shela Primary School in Lamu County, Kenya, learning together">
-          <div class="image-note">Shela Primary School<br><span>Lamu County, Kenya</span></div>
+          <div class="image-note">Learning is better<br>when we share it.<span>Shela · Lamu County</span></div>
         </div>
       </section>
 
-      <section class="landing-paths" aria-labelledby="landing-paths-title">
-        <div class="landing-paths-heading">
-          <span class="eyebrow">A good place to begin</span>
-          <h2 id="landing-paths-title">What are you working on?</h2>
+      <section class="landing-features" aria-labelledby="landing-features-title">
+        <div class="landing-section-heading">
+          <span class="eyebrow">A community built around learning</span>
+          <h2 id="landing-features-title">A brighter path, together.</h2>
+          <p>Whatever you’re learning, you don’t have to do it alone.</p>
         </div>
-        <div class="landing-path-list">
-          <a class="landing-path" href="#resources" data-page="resources">
-            <span class="landing-path-number">01</span>
-            <span class="landing-path-copy"><strong>Looking for notes?</strong><span>Browse and share study resources.</span></span>
-            <span class="landing-path-arrow" aria-hidden="true">↗</span>
-          </a>
-          <a class="landing-path" href="#groups" data-page="groups">
-            <span class="landing-path-number">02</span>
-            <span class="landing-path-copy"><strong>Rather study together?</strong><span>Find a group or start one.</span></span>
-            <span class="landing-path-arrow" aria-hidden="true">↗</span>
-          </a>
-          <a class="landing-path" href="#qa" data-page="qa">
-            <span class="landing-path-number">03</span>
-            <span class="landing-path-copy"><strong>Got a question?</strong><span>Ask it. Someone else may know.</span></span>
-            <span class="landing-path-arrow" aria-hidden="true">↗</span>
-          </a>
+        <div class="landing-feature-grid">
+          ${features.map(([icon, title, description, action, page]) => `<article class="landing-feature-card">
+            <div class="feature-icon" aria-hidden="true">${icon}</div>
+            <h3>${title}</h3>
+            <p>${description}</p>
+            <a href="#${page}" data-page="${page}">${action} <span aria-hidden="true">→</span></a>
+          </article>`).join('')}
         </div>
       </section>
 
-      <section class="landing-beginning">
-        <div>
-          <span class="eyebrow">A note about where we are</span>
-          <h2>We’re just getting started.</h2>
+      <section class="landing-resource-search" aria-labelledby="landing-search-title">
+        <div class="landing-search-copy">
+          <span class="eyebrow">Find your next useful resource</span>
+          <h2 id="landing-search-title">What would you like to learn?</h2>
+          <p>Search shared materials by subject, topic, or title.</p>
         </div>
-        <div class="landing-beginning-copy">
-          <p>There may not be a group for your subject or a stack of notes yet. That’s the point: the first one can come from you.</p>
-          <a class="text-link" href="#signup" data-page="signup">Make the first contribution <span aria-hidden="true">→</span></a>
-          <p class="landing-ai-note">Curious about <a href="#ai" data-page="ai">AI study tools</a>? Use the tools, keep your own curiosity.</p>
+        <form class="landing-search-form" id="landing-resource-search">
+          <label class="sr-only" for="landing-search-input">Search learning resources</label>
+          <span aria-hidden="true">⌕</span>
+          <input id="landing-search-input" name="search" type="search" placeholder="Search reading materials, subjects, topics..." autocomplete="off">
+          <button class="btn" type="submit">Search</button>
+        </form>
+        <div class="landing-search-chips" aria-label="Popular subjects">
+          ${['Mathematics', 'Science', 'Technology', 'Architecture', 'Business', 'Study skills'].map(subject => `<button type="button" data-search-term="${subject}">${subject}</button>`).join('')}
+        </div>
+      </section>
+
+      <section class="landing-community">
+        <div class="landing-community-image" role="img" aria-label="Students learning together at Shela Primary School"></div>
+        <div class="landing-community-copy">
+          <span class="eyebrow">People · Ideas · Brighter futures</span>
+          <h2>A nonprofit for a brighter future.</h2>
+          <p>We believe access to education grows when people share what they know. Bright Path brings learners together to find materials, help one another, and build confidence—including learning to use AI as a tool, not a substitute for understanding.</p>
+          <a class="btn btn-light" href="#signup" data-page="signup">Be part of the community <span aria-hidden="true">→</span></a>
         </div>
       </section>
     </main>
 
     <footer class="footer landing-footer">
-      <div><span class="brand brand-footer">Bright Path</span><p>Learning goes further when we share it.</p></div>
+      <div class="landing-footer-brand">
+        ${brand}
+        <p>People · Ideas · Brighter futures</p>
+      </div>
+      <nav class="landing-footer-links" aria-label="Footer">
+        <a href="#home" data-page="home">Home</a>
+        <a href="#resources" data-page="resources">Resources</a>
+        <a href="#groups" data-page="groups">Study Groups</a>
+        <a href="#community" data-page="community">Community</a>
+        <a href="#ai" data-page="ai">AI Learning Hub</a>
+      </nav>
       <div class="footer-credit">
         <p>Community-led. Built to grow with learners.</p>
         <p>Photo: Female students at Shela Primary School, Lamu County, by Queen Asali, Wikimedia Commons, licensed under CC BY-SA 4.0.</p>

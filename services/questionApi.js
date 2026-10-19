@@ -7,6 +7,12 @@ export async function listQuestions() {
   if (isSupabaseConfigured) return (await remoteSelect('questions', 'select=*&order=created_at.desc')).map(fromRemote);
   return readStore(key, []);
 }
+export async function listQuestionsByAuthor(userId) {
+  if (isSupabaseConfigured) {
+    return (await remoteSelect('questions', `select=id&author_id=eq.${encodeURIComponent(userId)}`)).map(fromRemote);
+  }
+  return readStore(key, []).filter(question => question.authorId === userId);
+}
 export async function createQuestion(userId, input) {
   if (isSupabaseConfigured) {
     const [row] = await remoteInsert('questions', {

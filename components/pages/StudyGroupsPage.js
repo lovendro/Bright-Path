@@ -2,8 +2,13 @@ import { listGroups, listGroupMessages } from '../../services/groupApi.js';
 import { listReviews } from '../../services/reviewApi.js';
 import { emptyState, escapeText } from '../Navigation.js';
 import { groupRows } from '../PageHelpers.js';
-export async function StudyGroupsPage(user, query = '', selectedGroupChatId = '') {
-  const groups = (await listGroups()).filter(group => `${group.name} ${group.description} ${group.subject || ''}`.toLowerCase().includes(query.toLowerCase()));
+export async function StudyGroupsPage(user, query = '', selectedGroupChatId = '', view = 'all', subject = '') {
+  const allGroups = await listGroups();
+  const groups = allGroups.filter(group =>
+    `${group.name} ${group.description} ${group.subject || ''}`.toLowerCase().includes(query.toLowerCase())
+    && (!subject || group.subject === subject)
+    && (view !== 'mine' || group.memberIds?.includes(user.id))
+  );
   const activeGroup = groups.find(group => group.id === selectedGroupChatId);
   if (selectedGroupChatId && activeGroup) {
     if (!activeGroup.memberIds?.includes(user.id)) throw new Error('Join this study group before opening its chat.');
@@ -13,6 +18,15 @@ export async function StudyGroupsPage(user, query = '', selectedGroupChatId = ''
   }
   const reviews = await Promise.all(groups.map(async group => [group.id, await listReviews('group', group.id)]));
   const reviewsByGroup = Object.fromEntries(reviews);
-  const body = groups.length ? groupRows(groups, user.id, reviewsByGroup) : emptyState(query ? 'No groups match that search' : 'No study groups have been created', query ? 'Try another search.' : 'Create the first group and invite other learners to join.', '<button class="btn btn-sm" data-modal="group">＋ Create the first group</button>');
-  return `<div class="welcome-row"><div><h1>Study Groups</h1><p>Find learners with shared goals, or start a new group.</p></div><button class="btn btn-sm" data-modal="group">＋ Create Group</button></div><div class="content-toolbar"><div class="content-search"><input id="page-search" placeholder="Search groups" value="${escapeText(query)}"></div></div><section class="panel"><div class="panel-head"><h2>All study groups</h2><span class="view-all">${groups.length} ${groups.length === 1 ? 'group' : 'groups'}</span></div>${body}</section>`;
+  const body = groups.length
+    ? groupRows(groups, user.id, reviewsByGroup)
+    : emptyState(view === 'mine' ? 'No joined groups yet' : 'No groups match those filters',
+      view === 'mine' ? 'Join a study group and it will appear here.' : 'Try a different search or clear the subject filter.',
+      view === 'mine' ? '<button class="btn btn-sm" data-group-view="all">Explore groups</button>' : '<button class="btn btn-light btn-sm" data-group-clear>Clear filters</button> <button class="btn btn-sm" data-modal="group">＋ Create a group</button>');
+  const subjects = [...new Set(allGroups.map(group => group.subject).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const subjectFilter = `<label>Subject<select class="field" data-group-subject><option value="">All subjects</option>${subjects.map(item => `<option value="${escapeText(item)}"${item === subject ? ' selected' : ''}>${escapeText(item)}</option>`).join('')}</select></label>`;
+  return `<div class="welcome-row"><div><span class="eyebrow">Find your people</span><h1>Study Groups</h1><p>Join or create a group to collaborate, share ideas, and learn together.</p></div><button class="btn btn-sm" data-modal="group">＋ Create Group</button></div>
+    <div class="group-controls"><div class="content-search"><label class="sr-only" for="page-search">Search study groups</label><input id="page-search" placeholder="Search groups by name or subject" value="${escapeText(query)}"></div>${subjectFilter}</div>
+    <div class="filter-tabs" role="tablist" aria-label="Study group views"><button type="button" class="filter-tab ${view === 'all' ? 'active' : ''}" data-group-view="all" role="tab" aria-selected="${view === 'all'}">All Groups <span>${allGroups.length}</span></button><button type="button" class="filter-tab ${view === 'mine' ? 'active' : ''}" data-group-view="mine" role="tab" aria-selected="${view === 'mine'}">My Groups <span>${allGroups.filter(group => group.memberIds?.includes(user.id)).length}</span></button></div>
+    <section class="panel"><div class="panel-head"><h2>${view === 'mine' ? 'My study groups' : 'All study groups'}</h2><span class="view-all">${groups.length} ${groups.length === 1 ? 'group' : 'groups'}</span></div>${body}</section>`;
 }

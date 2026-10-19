@@ -32,6 +32,10 @@ let user = currentUser();
 let page = location.hash.slice(1) || 'home';
 sessionStorage.removeItem('bright-path:confirmation-email');
 let query = '';
+let resourceFilters = { subject: '', type: '', level: '', sort: 'newest' };
+let groupView = 'all';
+let groupSubject = '';
+let questionView = 'recent';
 let selectedConversationId = '';
 let selectedGroupChatId = '';
 let learnerSearch = '';
@@ -674,8 +678,12 @@ async function render(animate = true) {
       const content = page === 'messages'
         ? await component(user, selectedConversationId, learnerSearchResults, learnerSearch)
         : page === 'groups'
-          ? await component(user, query, selectedGroupChatId)
-          : await component(user, query);
+          ? await component(user, query, selectedGroupChatId, groupView, groupSubject)
+          : page === 'resources'
+            ? await component(user, query, resourceFilters)
+            : page === 'qa'
+              ? await component(user, query, questionView)
+              : await component(user, query);
       if (thisRender !== renderVersion) return;
       root.innerHTML = appShell(content, user, animate);
       if (page === 'messages') {
@@ -765,7 +773,7 @@ async function preserveSearch(input) {
 
 document.addEventListener('click', async event => {
   const select = document.querySelector('[data-signup-select]');
-  const target = event.target.closest('[data-page], [data-modal], [data-action], [data-save], [data-join], [data-vote], [data-close-modal], [data-select-trigger], [data-select-option], [data-toggle-password], [data-open-conversation], [data-start-conversation], [data-request-response], [data-review-type], [data-group-chat], [data-close-group-chat], [data-start-call], [data-call-action], [data-mobile-more], [data-hide-call], [data-clear-call-history], [data-unsend-message], [data-message-menu-trigger], [data-message-menu-action]');
+  const target = event.target.closest('[data-page], [data-modal], [data-action], [data-save], [data-join], [data-vote], [data-close-modal], [data-select-trigger], [data-select-option], [data-toggle-password], [data-open-conversation], [data-start-conversation], [data-request-response], [data-review-type], [data-group-chat], [data-close-group-chat], [data-start-call], [data-call-action], [data-mobile-more], [data-hide-call], [data-clear-call-history], [data-unsend-message], [data-message-menu-trigger], [data-message-menu-action], [data-search-term], [data-public-menu], [data-group-view], [data-question-view], [data-resource-clear], [data-group-clear]');
   if (!event.target.closest('.message-actions')) {
     document.querySelectorAll('[data-message-menu]').forEach(menu => {
       menu.hidden = true;
@@ -784,7 +792,13 @@ document.addEventListener('click', async event => {
   }
   if (!target) return;
   try {
-    if (target.hasAttribute('data-mobile-more')) {
+    if (target.hasAttribute('data-public-menu')) {
+      const menu = document.getElementById('landing-mobile-links');
+      const expanded = target.getAttribute('aria-expanded') === 'true';
+      target.setAttribute('aria-expanded', String(!expanded));
+      target.setAttribute('aria-label', expanded ? 'Open navigation' : 'Close navigation');
+      menu.hidden = expanded;
+    } else if (target.hasAttribute('data-mobile-more')) {
       const menu = document.getElementById('mobile-island-menu');
       const expanded = target.getAttribute('aria-expanded') === 'true';
       target.setAttribute('aria-expanded', String(!expanded));
@@ -933,6 +947,26 @@ document.addEventListener('click', async event => {
       selectedConversationId = target.dataset.conversationId;
       await render(false);
       notify(target.dataset.requestResponse === 'accept' ? 'Message request accepted.' : 'Message request declined.');
+    } else if (target.dataset.groupView) {
+      groupView = target.dataset.groupView;
+      await render(false);
+    } else if (target.dataset.questionView) {
+      questionView = target.dataset.questionView;
+      await render(false);
+    } else if (target.hasAttribute('data-resource-clear')) {
+      query = '';
+      resourceFilters = { subject: '', type: '', level: '', sort: 'newest' };
+      await render(false);
+    } else if (target.hasAttribute('data-group-clear')) {
+      query = '';
+      groupSubject = '';
+      await render(false);
+    } else if (target.dataset.searchTerm) {
+      query = target.dataset.searchTerm;
+      page = user ? 'resources' : 'signup';
+      if (!user) sessionStorage.setItem('bright-path:return-to', 'resources');
+      history.pushState(null, '', `#${page}`);
+      await render();
     } else if (target.dataset.page) {
       event.preventDefault();
       navigate(target.dataset.page);
@@ -977,6 +1011,15 @@ document.addEventListener('click', async event => {
 
 document.addEventListener('submit', async event => {
   const form = event.target;
+  if (form.id === 'landing-resource-search') {
+    event.preventDefault();
+    query = String(new FormData(form).get('search') || '').trim();
+    page = user ? 'resources' : 'signup';
+    if (!user) sessionStorage.setItem('bright-path:return-to', 'resources');
+    history.pushState(null, '', `#${page}`);
+    await render();
+    return;
+  }
   if (form.id === 'auth-form') {
     event.preventDefault();
     const data = new FormData(form);
@@ -1106,6 +1149,16 @@ document.addEventListener('input', event => {
 });
 
 document.addEventListener('change', event => {
+  if (event.target.matches('[data-resource-filter]')) {
+    resourceFilters = { ...resourceFilters, [event.target.dataset.resourceFilter]: event.target.value };
+    render(false).catch(error => notify(error.message || 'Could not apply resource filters.'));
+    return;
+  }
+  if (event.target.matches('[data-group-subject]')) {
+    groupSubject = event.target.value;
+    render(false).catch(error => notify(error.message || 'Could not filter study groups.'));
+    return;
+  }
   if (event.target.id === 'profile-photo') {
     const file = event.target.files?.[0];
     const preview = document.querySelector('.profile-photo-preview');

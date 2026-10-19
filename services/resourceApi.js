@@ -9,6 +9,13 @@ export async function listResources() {
     .map(async row => ({ ...fromRemote(row), attachments: await resolveCommunityAttachments(row.attachments || []) })));
   return readStore(key, []);
 }
+export async function listResourcesByOwner(userId) {
+  if (isSupabaseConfigured) {
+    const rows = await remoteSelect('resources', `select=*&author_id=eq.${encodeURIComponent(userId)}&order=created_at.desc`);
+    return Promise.all(rows.map(async row => ({ ...fromRemote(row), attachments: await resolveCommunityAttachments(row.attachments || []) })));
+  }
+  return readStore(key, []).filter(item => item.ownerId === userId);
+}
 export async function createResource(userId, input) {
   if (isSupabaseConfigured) {
     const attachments = await uploadCommunityAttachments(userId, 'resources', input.files);
