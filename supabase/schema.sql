@@ -358,6 +358,25 @@ $$;
 revoke all on function public.get_study_group_members(uuid) from public;
 grant execute on function public.get_study_group_members(uuid) to authenticated;
 
+create or replace function public.can_invite_to_private_group(target_group_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select auth.uid() is not null and exists (
+    select 1
+    from public.study_groups study_group
+    join public.group_members member on member.group_id = study_group.id
+    where study_group.id = target_group_id
+      and not study_group.is_public
+      and member.user_id = auth.uid()
+  );
+$$;
+revoke all on function public.can_invite_to_private_group(uuid) from public;
+grant execute on function public.can_invite_to_private_group(uuid) to authenticated;
+
 create or replace function public.update_question_vote_count()
 returns trigger
 language plpgsql
@@ -565,7 +584,9 @@ drop policy if exists "Group owners can update their groups" on public.study_gro
 drop policy if exists "Group owners can delete their groups" on public.study_groups;
 drop policy if exists "Authenticated learners can view group membership" on public.group_members;
 drop policy if exists "Learners can join as themselves" on public.group_members;
+drop policy if exists "Group members can add to private groups" on public.group_members;
 drop policy if exists "Learners can leave their own groups" on public.group_members;
+drop policy if exists "Group owners can remove other members" on public.group_members;
 drop policy if exists "Authenticated learners can read questions" on public.questions;
 drop policy if exists "Learners can ask questions as themselves" on public.questions;
 drop policy if exists "Question authors can update their questions" on public.questions;
@@ -702,9 +723,22 @@ create policy "Learners can join as themselves"
     user_id = (select auth.uid())
     and public.can_view_study_group(group_id)
   );
+create policy "Group members can add to private groups"
+  on public.group_members for insert to authenticated
+  with check (public.can_invite_to_private_group(group_id));
 create policy "Learners can leave their own groups"
   on public.group_members for delete to authenticated
   using (user_id = (select auth.uid()));
+create policy "Group owners can remove other members"
+  on public.group_members for delete to authenticated
+  using (
+    user_id <> (select owner_id from public.study_groups where id = group_id)
+    and exists (
+      select 1 from public.study_groups study_group
+      where study_group.id = group_id
+        and study_group.owner_id = (select auth.uid())
+    )
+  );
 
 create policy "Authenticated learners can read questions"
   on public.questions for select to authenticated using (true);

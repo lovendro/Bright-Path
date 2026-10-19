@@ -37,11 +37,11 @@ export async function createGroup(userId, input) {
   if (isSupabaseConfigured) {
     const [row] = await remoteInsert('study_groups', {
       name: input.name || input.title, description: input.description, subject: input.subject,
-      owner_id: userId, author_name: input.authorName
+      owner_id: userId, author_name: input.authorName, is_public: input.isPublic !== false
     });
     return { ...fromRemote(row), memberIds: [userId] };
   }
-  const group = { id: makeId(), ...input, ownerId: userId, isPublic: true, memberIds: [userId], createdAt: new Date().toISOString() };
+  const group = { id: makeId(), ...input, ownerId: userId, isPublic: input.isPublic !== false, memberIds: [userId], createdAt: new Date().toISOString() };
   writeStore(key, [group, ...readStore(key, [])]);
   return group;
 }
@@ -89,6 +89,42 @@ export async function joinGroup(userId, groupId) {
     throw new Error('This group is private and cannot be joined from the directory.');
   }
   group.memberIds = group.memberIds.includes(userId) ? group.memberIds : [...group.memberIds, userId];
+  writeStore(key, groups);
+}
+
+export async function addGroupMember(userId, groupId, targetUserId) {
+  if (isSupabaseConfigured) {
+    if (userId === targetUserId) throw new Error('You are already in this group.');
+    await remoteInsert('group_members', { group_id: groupId, user_id: targetUserId }, {
+      query: 'on_conflict=group_id,user_id&select=*', ignoreDuplicates: true
+    });
+    return;
+  }
+  const groups = readStore(key, []);
+  const group = groups.find(item => item.id === groupId);
+  if (!group || group.isPublic !== false) throw new Error('Members can add learners to private groups only.');
+  if (!group.memberIds.includes(userId)) throw new Error('Only current group members can add learners.');
+  if (userId === targetUserId) throw new Error('You are already in this group.');
+  const target = readStore('accounts', []).find(account => account.id === targetUserId);
+  if (!target) throw new Error('That learner could not be found.');
+  if (!group.memberIds.includes(targetUserId)) {
+    group.memberIds = [...group.memberIds, targetUserId];
+    writeStore(key, groups);
+  }
+}
+
+export async function removeGroupMember(userId, groupId, targetUserId) {
+  if (userId === targetUserId) throw new Error('Group owners cannot remove themselves.');
+  if (isSupabaseConfigured) {
+    const removed = await remoteDelete('group_members',
+      `group_id=eq.${encodeURIComponent(groupId)}&user_id=eq.${encodeURIComponent(targetUserId)}`);
+    if (!removed.length) throw new Error('Only the group owner can remove members.');
+    return;
+  }
+  const groups = readStore(key, []);
+  const group = groups.find(item => item.id === groupId);
+  if (!group || group.ownerId !== userId) throw new Error('Only the group owner can remove members.');
+  group.memberIds = group.memberIds.filter(memberId => memberId !== targetUserId);
   writeStore(key, groups);
 }
 

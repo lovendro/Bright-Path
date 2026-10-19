@@ -38,7 +38,7 @@ Before a public launch, configure a TURN relay, add moderation/reporting, privac
 
 In Messages, learners can remove individual calls or clear their own call history; these actions do not remove the other participant's records. Run the updated `supabase/schema.sql` to enable call-history management in an existing Supabase project.
 
-Study-group owners can view the member roster and switch groups between public and private. Private groups are hidden from other learners and allow existing members to keep using the group; new learners cannot join them from the directory. Run the updated `supabase/schema.sql` in the Supabase SQL Editor to enable group visibility and roster permissions.
+Groups can be created as public or private. Private groups are hidden from the directory; any current member can add another learner, while only the owner can remove a member or view the roster. Chat bubbles do not show sender avatars, and message owners can edit or unsend from the adjacent three-dot menu. Run the updated `supabase/schema.sql` in the Supabase SQL Editor to enable private-group membership rules.
 
 ## Kenyan imagery and motion
 

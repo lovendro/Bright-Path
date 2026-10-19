@@ -17,10 +17,18 @@ export function groupRows(groups, userId, reviewsByGroup = {}) {
     const isOwner = group.ownerId === userId;
     const reviews = reviewsByGroup[group.id] || [];
     const average = reviews.length ? (reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length).toFixed(1) : '';
-    const ownerControls = isOwner
-      ? `<div class="group-admin-controls"><label><span>Visibility</span><select class="field" data-group-visibility="${escapeText(group.id)}" aria-label="${escapeText(group.name)} visibility"><option value="public"${group.isPublic !== false ? ' selected' : ''}>Public</option><option value="private"${group.isPublic === false ? ' selected' : ''}>Private</option></select></label><button class="btn btn-light btn-sm" data-group-members="${escapeText(group.id)}" data-group-name="${escapeText(group.name)}">Members</button></div>`
-      : '';
-    return `<article class="group-row accent-teal"><div class="group-avatar" aria-hidden="true">${icon('groups', 21)}</div><div class="group-details"><h3>${escapeText(group.name)}</h3>${group.subject ? `<span class="tag">${escapeText(group.subject)}</span>` : ''}<p>${escapeText(group.description)}</p><span class="group-review-summary">${average ? `${average} ★ · ${reviews.length} ${reviews.length === 1 ? 'review' : 'reviews'}` : 'No reviews yet'}</span></div><span class="group-count">${group.memberIds?.length || 1} members</span>${joined ? `<span class="joined-tag">Joined</span><button class="btn btn-light btn-sm" data-review-type="group" data-review-target="${escapeText(group.id)}" data-review-name="${escapeText(group.name)}">Review</button><button class="btn btn-sm" data-group-chat="${escapeText(group.id)}">Open chat</button>` : `<button class="join-btn" data-join="${escapeText(group.id)}">Join Group</button>`}${ownerControls}</article>`;
+    const menuItems = [
+      joined
+        ? `<button type="button" data-group-chat="${escapeText(group.id)}">Open chat</button><button type="button" data-review-type="group" data-review-target="${escapeText(group.id)}" data-review-name="${escapeText(group.name)}">Reviews</button>`
+        : `<button type="button" data-join="${escapeText(group.id)}">Join group</button>`,
+      joined && group.isPublic === false
+        ? `<button type="button" data-add-group-member="${escapeText(group.id)}" data-group-name="${escapeText(group.name)}">Add member</button>`
+        : '',
+      isOwner
+        ? `<button type="button" data-group-members="${escapeText(group.id)}" data-group-name="${escapeText(group.name)}">Manage members</button><label class="group-visibility-control" for="group-visibility-${escapeText(group.id)}"><span>Visibility</span><select class="field" id="group-visibility-${escapeText(group.id)}" data-group-visibility="${escapeText(group.id)}" aria-label="${escapeText(group.name)} visibility"><option value="public"${group.isPublic !== false ? ' selected' : ''}>Public</option><option value="private"${group.isPublic === false ? ' selected' : ''}>Private</option></select></label>`
+        : ''
+    ].filter(Boolean).join('');
+    return `<article class="group-row accent-teal"><div class="group-avatar" aria-hidden="true">${icon('groups', 21)}</div><div class="group-details"><h3>${escapeText(group.name)}</h3>${group.subject ? `<span class="tag">${escapeText(group.subject)}</span>` : ''}<p>${escapeText(group.description)}</p><span class="group-review-summary">${average ? `${average} ★ · ${reviews.length} ${reviews.length === 1 ? 'review' : 'reviews'}` : 'No reviews yet'}</span></div><span class="group-count">${group.memberIds?.length || 1} members</span>${joined ? '<span class="joined-tag">Joined</span>' : ''}<div class="group-actions"><button class="group-menu-trigger" type="button" data-group-menu-trigger aria-label="Options for ${escapeText(group.name)}" aria-expanded="false">⋯</button><div class="group-options-menu" data-group-menu hidden>${menuItems}</div></div></article>`;
   }).join('')}</div>`;
 }
 export function questionRows(questions) {

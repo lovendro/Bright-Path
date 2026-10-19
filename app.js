@@ -1,5 +1,5 @@
-import { currentUser, login, logout, register, createResource, createGroup, createQuestion, createAnswer, createDiscussion, toggleSavedResource, joinGroup, updateGroupVisibility, getGroupMembers, voteQuestion, markNotificationsRead, updateProfile, updateProfilePicture, getProfile, respondToConversationRequest, searchLearners, sendChatMessage, editChatMessage, unsendChatMessage, startConversation, listReviews, saveReview, sendGroupMessage, editGroupMessage, unsendGroupMessage, listGroupMessages, listGroupMessageIds, startCall, listRingingCalls, getCall, respondToCall, markCallMissed, sendCallSignal as publishCallSignal, listCallSignals, clearCallSignals, clearCallHistory, hideCallHistory, listConversations, listConversationMessages, listConversationMessageIds } from './services/index.js';
-import { appShell, escapeText, learnerAvatar } from './components/Navigation.js';
+import { currentUser, login, logout, register, createResource, createGroup, createQuestion, createAnswer, createDiscussion, toggleSavedResource, joinGroup, updateGroupVisibility, getGroupMembers, addGroupMember, removeGroupMember, voteQuestion, markNotificationsRead, updateProfile, updateProfilePicture, getProfile, respondToConversationRequest, searchLearners, sendChatMessage, editChatMessage, unsendChatMessage, startConversation, listReviews, saveReview, sendGroupMessage, editGroupMessage, unsendGroupMessage, listGroupMessages, listGroupMessageIds, listGroups, startCall, listRingingCalls, getCall, respondToCall, markCallMissed, sendCallSignal as publishCallSignal, listCallSignals, clearCallSignals, clearCallHistory, hideCallHistory, listConversations, listConversationMessages, listConversationMessageIds } from './services/index.js';
+import { appShell, escapeText } from './components/Navigation.js';
 import { LandingPage } from './components/pages/LandingPage.js';
 import { SignupPage } from './components/pages/SignupPage.js';
 import { LoginPage } from './components/pages/LoginPage.js';
@@ -14,7 +14,6 @@ import { NotificationsPage } from './components/pages/NotificationsPage.js';
 import { ProfilePage } from './components/pages/ProfilePage.js';
 import { SettingsPage } from './components/pages/SettingsPage.js';
 import { isSupabaseConfigured } from './services/supabaseConfig.js';
-import { getProfileAvatarUrls } from './services/profileApi.js';
 
 const protectedPages = new Set(['home', 'resources', 'groups', 'qa', 'community', 'ai', 'messages', 'notifications', 'profile', 'settings']);
 const components = {
@@ -434,16 +433,16 @@ async function refreshActiveChat() {
   const groupThread = document.querySelector('.group-chat-thread[data-group-id][data-latest-at]');
   if (!directThread && !groupThread) return;
 
-  const appendMessageActions = (article, messageId, kind) => {
+  const appendMessageActions = (container, messageId, kind) => {
     const actions = document.createElement('div');
     actions.className = 'message-actions';
     const trigger = document.createElement('button');
     trigger.className = 'message-menu-trigger';
     trigger.type = 'button';
     trigger.dataset.messageMenuTrigger = '';
-    trigger.setAttribute('aria-label', 'More message options');
+    trigger.setAttribute('aria-label', 'Message options');
     trigger.setAttribute('aria-expanded', 'false');
-    trigger.textContent = '⋮';
+    trigger.textContent = '⋯';
     const menu = document.createElement('div');
     menu.className = 'message-menu';
     menu.dataset.messageMenu = '';
@@ -456,12 +455,12 @@ async function refreshActiveChat() {
       option.textContent = label;
       menu.append(option);
     }
-    article.dataset.messageId = messageId;
     actions.append(trigger, menu);
-    article.append(actions);
+    container.closest('[data-message-id]').dataset.messageId = messageId;
+    container.append(actions);
   };
 
-  const append = (thread, messages, isGroup, avatarUrls = {}) => {
+  const append = (thread, messages, isGroup) => {
     const shouldScroll = thread.scrollHeight - thread.scrollTop - thread.clientHeight < 48;
     thread.querySelector('.settings-hint')?.remove();
     thread.querySelector('.chat-empty')?.remove();
@@ -474,8 +473,10 @@ async function refreshActiveChat() {
           else if (message.text) {
             const text = document.createElement('p');
             text.textContent = message.text;
-            existing.querySelector('img')?.before(text);
-            if (!existing.querySelector('img')) existing.querySelector('time').before(text);
+            const contentRow = existing.querySelector('.group-message-content-row');
+            const actions = contentRow?.querySelector('.message-actions');
+            if (actions) actions.before(text);
+            else contentRow?.append(text);
           } else currentText?.remove();
         } else if (currentText) currentText.textContent = message.text;
         continue;
@@ -486,20 +487,19 @@ async function refreshActiveChat() {
         article.dataset.messageId = message.id;
         const author = document.createElement('div');
         author.className = 'group-chat-message-author';
-        author.insertAdjacentHTML('beforeend', learnerAvatar(
-          message.senderName || 'Learner',
-          message.senderId === user.id ? user.avatarUrl : avatarUrls[message.senderId] || '',
-          'group-chat-avatar'
-        ));
         const name = document.createElement('strong');
         name.textContent = message.senderName || 'Learner';
         author.append(name);
         article.append(author);
+        const contentRow = document.createElement('div');
+        contentRow.className = 'group-message-content-row';
         if (message.text) {
           const text = document.createElement('p');
           text.textContent = message.text;
-          article.append(text);
+          contentRow.append(text);
         }
+        if (message.senderId === user.id) appendMessageActions(contentRow, message.id, 'group');
+        article.append(contentRow);
         if (message.imageUrl) {
           const image = document.createElement('img');
           image.src = message.imageUrl;
@@ -510,24 +510,21 @@ async function refreshActiveChat() {
         const time = document.createElement('time');
         time.textContent = new Date(message.createdAt).toLocaleString();
         article.append(time);
-        if (message.senderId === user.id) appendMessageActions(article, message.id, 'group');
         thread.append(article);
       } else {
         const bubble = document.createElement('article');
         bubble.className = `bubble ${message.senderId === user.id ? 'mine' : ''}`;
         bubble.dataset.messageId = message.id;
-        bubble.insertAdjacentHTML('beforeend', learnerAvatar(
-          message.senderId === user.id ? user.name : 'Learner',
-          message.senderId === user.id ? user.avatarUrl : avatarUrls[message.senderId] || '',
-          'bubble-sender-avatar'
-        ));
+        const contentRow = document.createElement('div');
+        contentRow.className = 'bubble-content-row';
         const text = document.createElement('p');
         text.textContent = message.text;
         const time = document.createElement('time');
         time.dateTime = message.createdAt;
         time.textContent = new Date(message.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-        bubble.append(text, time);
-        if (message.senderId === user.id) appendMessageActions(bubble, message.id, 'direct');
+        contentRow.append(text);
+        if (message.senderId === user.id) appendMessageActions(contentRow, message.id, 'direct');
+        bubble.append(contentRow, time);
         thread.append(bubble);
       }
       thread.dataset.latestAt = message.createdAt;
@@ -548,15 +545,13 @@ async function refreshActiveChat() {
 
   if (directThread && selectedConversationId) {
     const messages = await listConversationMessages(user.id, selectedConversationId, directThread.dataset.latestAt);
-    const avatarUrls = await getProfileAvatarUrls([...new Set(messages.map(message => message.senderId))]);
     directThread.dataset.visibleMessageIds = (await listConversationMessageIds(user.id, selectedConversationId)).join(',');
-    append(directThread, messages, false, avatarUrls);
+    append(directThread, messages, false);
   }
   if (groupThread) {
     const messages = await listGroupMessages(groupThread.dataset.groupId, groupThread.dataset.latestAt);
-    const avatarUrls = await getProfileAvatarUrls([...new Set(messages.map(message => message.senderId))]);
     groupThread.dataset.visibleMessageIds = (await listGroupMessageIds(groupThread.dataset.groupId)).join(',');
-    append(groupThread, messages, true, avatarUrls);
+    append(groupThread, messages, true);
   }
 }
 
@@ -753,6 +748,31 @@ function navigate(nextPage) {
   window.scrollTo(0, 0);
 }
 
+function groupMemberRows(members, groupId, groupName) {
+  return members.map(member => {
+    const name = member.full_name || 'Learner';
+    const initials = name.trim().split(/\s+/).slice(0, 2).map(part => part[0] || '').join('').toUpperCase();
+    const joinedAt = member.joined_at && Number.isFinite(Date.parse(member.joined_at))
+      ? new Date(member.joined_at).toLocaleDateString()
+      : '';
+    const removeMenu = member.user_id !== user.id
+      ? `<div class="group-member-actions"><button class="group-menu-trigger" type="button" data-member-menu-trigger aria-label="Options for ${escapeText(name)}" aria-expanded="false">⋯</button><div class="group-options-menu" data-group-menu hidden><button type="button" data-remove-group-member="${escapeText(member.user_id)}" data-group-id="${escapeText(groupId)}" data-group-name="${escapeText(groupName)}" data-member-name="${escapeText(name)}">Remove from group</button></div></div>`
+      : '';
+    return `<li class="group-member-row"><span class="group-member-initial" aria-hidden="true">${escapeText(initials)}</span><span class="group-member-copy"><strong>${escapeText(name)}</strong><small>${escapeText(member.level || 'Learner')}</small></span>${joinedAt ? `<time>${escapeText(joinedAt)}</time>` : ''}${removeMenu}</li>`;
+  }).join('') || '<li class="settings-hint">No members found.</li>';
+}
+
+async function showGroupMembersModal(groupId, groupName) {
+  const members = await getGroupMembers(user.id, groupId);
+  document.getElementById('modal-backdrop')?.remove();
+  document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="modal-backdrop"><section class="modal group-members-modal" role="dialog" aria-modal="true" aria-labelledby="group-members-title"><div class="modal-head"><h2 id="group-members-title">Members · ${escapeText(groupName)}</h2><button class="modal-close" data-close-modal aria-label="Close">×</button></div><ul class="group-member-list">${groupMemberRows(members, groupId, groupName)}</ul></section></div>`);
+}
+
+function showGroupInviteModal(groupId, groupName) {
+  document.getElementById('modal-backdrop')?.remove();
+  document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="modal-backdrop"><section class="modal group-invite-modal" role="dialog" aria-modal="true" aria-labelledby="group-invite-title"><div class="modal-head"><h2 id="group-invite-title">Add a member · ${escapeText(groupName)}</h2><button class="modal-close" data-close-modal aria-label="Close">×</button></div><form id="group-invite-search-form" data-group-id="${escapeText(groupId)}" data-group-name="${escapeText(groupName)}"><label for="group-invite-search">Find a learner</label><div class="group-invite-search-row"><input class="field" id="group-invite-search" name="search" required minlength="2" maxlength="80" placeholder="Search by name"><button class="btn btn-sm" type="submit">Search</button></div></form><ul class="group-member-list" id="group-invite-results"><li class="settings-hint">Search for a learner to add to this private group.</li></ul></section></div>`);
+}
+
 async function showModal(kind) {
   if (kind === 'edit-profile') {
     const profile = await getProfile(user.id) || {};
@@ -771,6 +791,9 @@ async function showModal(kind) {
     ? '<span class="attachment-field-label">Pictures or documents <span class="optional">(optional)</span></span><div class="attachment-picker"><input class="attachment-input" id="create-attachments" name="attachments" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,image/jpeg,image/png,image/webp,application/pdf" multiple aria-label="Choose pictures or documents to attach" aria-describedby="attachment-selection attachment-hint"><label class="attachment-picker-button" for="create-attachments"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14.5v3A2.5 2.5 0 0 0 7.5 20h9a2.5 2.5 0 0 0 2.5-2.5v-3"/></svg><span>Choose files</span></label><span class="attachment-selection" id="attachment-selection" aria-live="polite">No files selected</span></div><span class="attachment-hint" id="attachment-hint">JPG, PNG, WebP, PDF, Word, PowerPoint, or Excel · up to 5 files, 15 MB each (25 MB total)</span>'
     : '';
   document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modal-head"><h2 id="modal-title">${title}</h2><button class="modal-close" data-close-modal aria-label="Close">×</button></div><form id="create-form" data-kind="${kind}"><label for="create-title">${titleLabel}</label><input class="field" id="create-title" name="title" required maxlength="140" placeholder="${titleLabel}">${kind === 'resource' || kind === 'question' ? `<label for="create-subject">Subject <span class="optional">(optional)</span></label><input class="field" id="create-subject" name="subject" maxlength="60" placeholder="e.g. Biology">` : ''}<label for="create-description">Details</label><textarea class="field" id="create-description" name="description" required maxlength="3000" placeholder="${detailPlaceholder}"></textarea>${kind === 'resource' ? '<label for="create-type">Resource type</label><select class="field" id="create-type" name="type"><option>Notes</option><option>Study guide</option><option>Article</option><option>Practice questions</option><option>Other</option></select>' : ''}${attachmentField}<button class="btn">${submitLabel}</button></form></section></div>`);
+  if (kind === 'group') {
+    document.getElementById('create-description').insertAdjacentHTML('afterend', '<label for="create-group-visibility">Visibility</label><select class="field" id="create-group-visibility" name="isPublic"><option value="public" selected>Public · anyone can find and join</option><option value="private">Private · members can invite learners</option></select>');
+  }
   document.getElementById('create-title').focus();
 }
 
@@ -795,7 +818,7 @@ async function createContent(form) {
   };
   const kind = form.dataset.kind;
   if (kind === 'resource') await createResource(user.id, { ...common, type: String(fields.get('type') || 'Notes'), level: user.level });
-  if (kind === 'group') await createGroup(user.id, { ...common, name: common.title });
+  if (kind === 'group') await createGroup(user.id, { ...common, name: common.title, isPublic: fields.get('isPublic') !== 'private' });
   if (kind === 'question') await createQuestion(user.id, common);
   if (kind === 'discussion') await createDiscussion(user.id, common);
   document.getElementById('modal-backdrop')?.remove();
@@ -816,12 +839,17 @@ async function preserveSearch(input) {
 
 document.addEventListener('click', async event => {
   const select = document.querySelector('[data-signup-select]');
-  const target = event.target.closest('a[data-page], button[data-page], [data-modal], [data-action], [data-save], [data-join], [data-vote], [data-close-modal], [data-select-trigger], [data-select-option], [data-toggle-password], [data-open-conversation], [data-start-conversation], [data-request-response], [data-review-type], [data-group-chat], [data-group-members], [data-close-group-chat], [data-start-call], [data-call-action], [data-mobile-more], [data-hide-call], [data-clear-call-history], [data-unsend-message], [data-message-menu-trigger], [data-message-menu-action], [data-search-term], [data-public-menu], [data-group-view], [data-question-view], [data-profile-tab], [data-notification-view], [data-open-question], [data-questions-back], [data-back-messages], [data-resource-clear], [data-group-clear]');
-  if (!event.target.closest('.message-actions')) {
-    document.querySelectorAll('[data-message-menu]').forEach(menu => {
+  const target = event.target.closest('a[data-page], button[data-page], [data-modal], [data-action], [data-save], [data-join], [data-vote], [data-close-modal], [data-select-trigger], [data-select-option], [data-toggle-password], [data-open-conversation], [data-start-conversation], [data-request-response], [data-review-type], [data-group-chat], [data-group-members], [data-group-menu-trigger], [data-member-menu-trigger], [data-add-group-member], [data-remove-group-member], [data-group-invite-target], [data-close-group-chat], [data-start-call], [data-call-action], [data-mobile-more], [data-hide-call], [data-clear-call-history], [data-unsend-message], [data-message-menu-trigger], [data-message-menu-action], [data-search-term], [data-public-menu], [data-group-view], [data-question-view], [data-profile-tab], [data-notification-view], [data-open-question], [data-questions-back], [data-back-messages], [data-resource-clear], [data-group-clear]');
+  if (!event.target.closest('.message-actions, .group-actions, .group-member-actions')) {
+    document.querySelectorAll('[data-message-menu], [data-group-menu]').forEach(menu => {
       menu.hidden = true;
-      menu.parentElement.querySelector('[data-message-menu-trigger]')?.setAttribute('aria-expanded', 'false');
+      menu.parentElement.querySelector('[data-message-menu-trigger], [data-group-menu-trigger], [data-member-menu-trigger]')?.setAttribute('aria-expanded', 'false');
     });
+  }
+  const chosenMenu = target?.closest('[data-message-menu], [data-group-menu]');
+  if (chosenMenu) {
+    chosenMenu.hidden = true;
+    chosenMenu.parentElement.querySelector('[data-message-menu-trigger], [data-group-menu-trigger], [data-member-menu-trigger]')?.setAttribute('aria-expanded', 'false');
   }
   if (user && target) primeCallAudio();
   if (select?.classList.contains('is-open') && !select.contains(event.target)) {
@@ -868,12 +896,12 @@ document.addEventListener('click', async event => {
       select.querySelector('[data-select-trigger]').focus();
     } else if (target.dataset.action === 'edit-profile') {
       await showModal('edit-profile');
-    } else if (target.hasAttribute('data-message-menu-trigger')) {
-      const menu = target.parentElement.querySelector('[data-message-menu]');
+    } else if (target.hasAttribute('data-message-menu-trigger') || target.hasAttribute('data-group-menu-trigger') || target.hasAttribute('data-member-menu-trigger')) {
+      const menu = target.parentElement.querySelector('[data-message-menu], [data-group-menu]');
       const opening = menu.hidden;
-      document.querySelectorAll('[data-message-menu]').forEach(item => {
+      document.querySelectorAll('[data-message-menu], [data-group-menu]').forEach(item => {
         item.hidden = true;
-        item.parentElement.querySelector('[data-message-menu-trigger]')?.setAttribute('aria-expanded', 'false');
+        item.parentElement.querySelector('[data-message-menu-trigger], [data-group-menu-trigger], [data-member-menu-trigger]')?.setAttribute('aria-expanded', 'false');
       });
       menu.hidden = !opening;
       target.setAttribute('aria-expanded', String(opening));
@@ -965,16 +993,22 @@ document.addEventListener('click', async event => {
       selectedConversationId = '';
       await render(false);
     } else if (target.dataset.groupMembers) {
-      const members = await getGroupMembers(user.id, target.dataset.groupMembers);
-      const memberRows = members.map(member => {
-        const name = member.full_name || 'Learner';
-        const initials = name.trim().split(/\s+/).slice(0, 2).map(part => part[0] || '').join('').toUpperCase();
-        const joinedAt = member.joined_at && Number.isFinite(Date.parse(member.joined_at))
-          ? new Date(member.joined_at).toLocaleDateString()
-          : '';
-        return `<li class="group-member-row"><span class="group-member-initial">${escapeText(initials)}</span><span class="group-member-copy"><strong>${escapeText(name)}</strong><small>${escapeText(member.level || 'Learner')}</small></span>${joinedAt ? `<time>${escapeText(joinedAt)}</time>` : ''}</li>`;
-      }).join('') || '<li class="settings-hint">No members found.</li>';
-      document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="modal-backdrop"><section class="modal group-members-modal" role="dialog" aria-modal="true" aria-labelledby="group-members-title"><div class="modal-head"><h2 id="group-members-title">Members · ${escapeText(target.dataset.groupName || 'Study group')}</h2><button class="modal-close" data-close-modal aria-label="Close">×</button></div><ul class="group-member-list">${memberRows}</ul></section></div>`);
+      await showGroupMembersModal(target.dataset.groupMembers, target.dataset.groupName || 'Study group');
+    } else if (target.dataset.addGroupMember) {
+      showGroupInviteModal(target.dataset.addGroupMember, target.dataset.groupName || 'Study group');
+    } else if (target.dataset.removeGroupMember) {
+      const memberName = target.dataset.memberName || 'this member';
+      if (!window.confirm(`Remove ${memberName} from this group?`)) return;
+      await removeGroupMember(user.id, target.dataset.groupId, target.dataset.removeGroupMember);
+      await render(false);
+      await showGroupMembersModal(target.dataset.groupId, target.dataset.groupName || 'Study group');
+      notify(`${memberName} was removed from the group.`);
+    } else if (target.dataset.groupInviteTarget) {
+      await addGroupMember(user.id, target.dataset.groupId, target.dataset.groupInviteTarget);
+      target.disabled = true;
+      target.textContent = 'Added';
+      await render(false);
+      notify('Learner added to the private group.');
     } else if (target.hasAttribute('data-group-chat')) {
       selectedGroupChatId = target.dataset.groupChat;
       page = 'groups';
@@ -1087,6 +1121,23 @@ document.addEventListener('click', async event => {
 
 document.addEventListener('submit', async event => {
   const form = event.target;
+  if (form.id === 'group-invite-search-form') {
+    event.preventDefault();
+    const searchTerm = String(new FormData(form).get('search') || '').trim();
+    const results = document.getElementById('group-invite-results');
+    try {
+      const [learners, groups] = await Promise.all([searchLearners(searchTerm), listGroups()]);
+      const group = groups.find(item => item.id === form.dataset.groupId);
+      const memberIds = new Set(group?.memberIds || []);
+      const available = learners.filter(learner => !memberIds.has(learner.id));
+      results.innerHTML = available.length
+        ? available.map(learner => `<li class="group-member-row"><span class="group-member-initial" aria-hidden="true">${escapeText((learner.full_name || 'L').slice(0, 1).toUpperCase())}</span><span class="group-member-copy"><strong>${escapeText(learner.full_name || 'Learner')}</strong><small>${escapeText(learner.level || 'Learner')}</small></span><button class="btn btn-light btn-sm" type="button" data-group-invite-target="${escapeText(learner.id)}" data-group-id="${escapeText(form.dataset.groupId)}">Add</button></li>`).join('')
+        : '<li class="settings-hint">No learners found to add.</li>';
+    } catch (error) {
+      notify(error.message || 'Could not search learners.');
+    }
+    return;
+  }
   if (form.id === 'global-search-form') {
     event.preventDefault();
     query = String(new FormData(form).get('search') || '').trim();
