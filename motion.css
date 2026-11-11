@@ -808,13 +808,17 @@ body {
   .call-window { max-height: calc(100svh - 24px); overflow-y: auto; }
   .call-media video { max-height: 48svh; }
   .toast {
-    right: 12px;
+    right: auto;
     bottom: calc(70px + env(safe-area-inset-bottom));
-    left: 12px;
+    left: 50%;
     width: max-content;
     max-width: calc(100vw - 24px);
-    margin: auto;
+    margin: 0;
     text-align: center;
+    transform: translateX(-50%) translateY(20px);
+  }
+  .toast.show {
+    transform: translateX(-50%) translateY(0);
   }
 }
 
