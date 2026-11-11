@@ -3836,6 +3836,23 @@ select:focus-visible {
   color: #fbbf24;
 }
 
+.mobile-island-menu-link[data-action="logout"] {
+  margin-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 0 0 12px 12px;
+  background: rgba(191, 70, 59, .12);
+  color: #f8b4ac;
+}
+
+.mobile-island-menu-link[data-action="logout"] span:last-child {
+  font-weight: 700;
+}
+
+.mobile-island-menu-link[data-action="logout"]:hover,
+.mobile-island-menu-link[data-action="logout"]:focus-visible {
+  background: rgba(191, 70, 59, .2);
+}
+
 .toast {
   border: 1px solid rgba(244, 175, 32, .32);
   background: var(--navy);
