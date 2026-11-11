@@ -18,8 +18,8 @@ export function LandingPage() {
           <h1>Learn.<br>Share.<br><span>Grow together.</span></h1>
           <p>Bright Path is a nonprofit learning community where students and learners find shared resources, solve problems together, and learn to use AI responsibly.</p>
           <div class="hero-buttons">
-            <a class="btn" href="#signup" data-page="signup">Get started <span aria-hidden="true">→</span></a>
-            <a class="btn btn-light" href="#resources" data-page="resources">Explore resources</a>
+            <a class="btn btn-sharp" href="#signup" data-page="signup">Get started <span aria-hidden="true">→</span></a>
+            <a class="btn btn-light btn-sharp" href="#resources" data-page="resources">Explore resources</a>
           </div>
           <a class="landing-secondary-link" href="#groups" data-page="groups">Or find a study group <span aria-hidden="true">↗</span></a>
         </div>
@@ -35,7 +35,7 @@ export function LandingPage() {
           <p>Whatever you’re learning, you don’t have to do it alone.</p>
         </div>
         <div class="landing-feature-grid">
-          ${features.map(([iconName, accent, title, description, action, page]) => `<article class="landing-feature-card accent-${accent}">
+          ${features.map(([iconName, accent, title, description, action, page]) => `<article class="landing-feature-card accent-${accent} card-sharp">
             <div class="feature-icon" aria-hidden="true">${icon(iconName, 22)}</div>
             <h3>${title}</h3>
             <p>${description}</p>
@@ -54,7 +54,7 @@ export function LandingPage() {
           <label class="sr-only" for="landing-search-input">Search learning resources</label>
           <span aria-hidden="true">⌕</span>
           <input id="landing-search-input" name="search" type="search" placeholder="Search reading materials, subjects, topics..." autocomplete="off">
-          <button class="btn" type="submit">Search</button>
+          <button class="btn btn-sharp" type="submit">Search</button>
         </form>
         <div class="landing-search-chips" aria-label="Popular subjects">
           ${['Mathematics', 'Science', 'Technology', 'Architecture', 'Business', 'Study skills'].map(subject => `<button type="button" data-search-term="${subject}">${subject}</button>`).join('')}
@@ -62,12 +62,12 @@ export function LandingPage() {
       </section>
 
       <section class="landing-community">
-        <div class="landing-community-image" role="img" aria-label="Students learning together at Shela Primary School"></div>
+        <div class="landing-community-image sharp-corners" role="img" aria-label="Students learning together at Shela Primary School"></div>
         <div class="landing-community-copy">
           <span class="eyebrow">People · Ideas · Brighter futures</span>
           <h2>A nonprofit for a brighter future.</h2>
           <p>We believe access to education grows when people share what they know. Bright Path brings learners together to find materials, help one another, and build confidence—including learning to use AI as a tool, not a substitute for understanding.</p>
-          <a class="btn btn-light" href="#signup" data-page="signup">Be part of the community <span aria-hidden="true">→</span></a>
+          <a class="btn btn-light btn-sharp" href="#signup" data-page="signup">Be part of the community <span aria-hidden="true">→</span></a>
         </div>
       </section>
     </main>

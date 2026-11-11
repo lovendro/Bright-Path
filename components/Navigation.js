@@ -10,7 +10,7 @@ const mobileMoreLinks = [['resources', 'Resources', 'resources'], ['community', 
 export function publicHeader() {
   const currentPage = location.hash.slice(1) || 'home';
   const navLinks = links.map(([label, page]) => `<a class="${currentPage === page ? 'active' : ''}" href="#${page}" data-page="${page}" ${currentPage === page ? 'aria-current="page"' : ''}>${label}</a>`).join('');
-  return `<nav class="landing-nav" aria-label="Main navigation">${brand}<div class="landing-links">${navLinks}</div><div class="landing-actions"><a class="text-link" href="#login" data-page="login">Log in</a><a class="btn btn-sm" href="#signup" data-page="signup">Sign Up</a><button class="public-nav-toggle" type="button" data-public-menu aria-expanded="false" aria-controls="landing-mobile-links" aria-label="Open navigation">☰</button></div><div class="landing-mobile-links" id="landing-mobile-links" hidden>${navLinks}</div></nav>`;
+  return `<nav class="landing-nav" aria-label="Main navigation">${brand}<div class="landing-links">${navLinks}</div><div class="landing-actions"><a class="text-link" href="#login" data-page="login">Log in</a><a class="btn btn-sm btn-sharp" href="#signup" data-page="signup">Sign Up</a><button class="public-nav-toggle" type="button" data-public-menu aria-expanded="false" aria-controls="landing-mobile-links" aria-label="Open navigation">☰</button></div><div class="landing-mobile-links" id="landing-mobile-links" hidden>${navLinks}</div></nav>`;
 }
 
 export function appShell(content, user, animate = true) {
